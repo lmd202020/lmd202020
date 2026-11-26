@@ -17,7 +17,7 @@ struct MainView: View {
 // MARK: - Home
 struct HomeView: View {
     var body: some View {
-        NavigationStack {
+        NavigationView {
             ZStack {
                 AppBackground()
                 ScrollView {
@@ -32,7 +32,7 @@ struct HomeView: View {
                                     .foregroundStyle(.cyan)
                             }
                             Spacer()
-                            Image("AppIcon").resizable().scaledToFit()
+                            Image("BrandLogo").resizable().scaledToFit()
                                 .frame(width: 55, height: 55)
                                 .clipShape(RoundedRectangle(cornerRadius: 14))
                         }
@@ -65,6 +65,7 @@ struct CrosshairTrainerView: View {
     @AppStorage("bestScore") private var bestScore: Int = 0
     @State private var crosshairPos: CGPoint = .zero
     @State private var targetPos: CGPoint = .zero
+    @State private var playfieldSize: CGSize = .zero
     @State private var score = 0
     @State private var hits = 0
     @State private var misses = 0
@@ -77,7 +78,7 @@ struct CrosshairTrainerView: View {
     private let targetSize: CGFloat = 70
 
     var body: some View {
-        NavigationStack {
+        NavigationView {
             ZStack {
                 AppBackground()
 
@@ -133,7 +134,7 @@ struct CrosshairTrainerView: View {
                                     .frame(width: crosshairSize, height: crosshairSize)
                                     .position(crosshairPos)
                                     .gesture(
-                                        DragGesture()
+                                        DragGesture(coordinateSpace: .named("playfield"))
                                             .onChanged { val in
                                                 crosshairPos = clamp(val.location, in: geo.size)
                                             }
@@ -150,9 +151,18 @@ struct CrosshairTrainerView: View {
                                         .allowsHitTesting(false)
                                 }
                             }
+                            .coordinateSpace(name: "playfield")
                             .onAppear {
+                                playfieldSize = geo.size
                                 crosshairPos = CGPoint(x: geo.size.width / 2, y: geo.size.height / 2)
                                 targetPos = randomPoint(in: geo.size)
+                            }
+                            .onChange(of: geo.size) { newSize in
+                                playfieldSize = newSize
+                                if !isRunning {
+                                    crosshairPos = CGPoint(x: newSize.width / 2, y: newSize.height / 2)
+                                    targetPos = randomPoint(in: newSize)
+                                }
                             }
                         }
 
@@ -175,7 +185,6 @@ struct CrosshairTrainerView: View {
                 }
             }
             .navigationTitle("Kéo Tâm")
-            .toolbarColorScheme(.dark)
         }
         .onDisappear { stopTimer() }
     }
@@ -183,15 +192,15 @@ struct CrosshairTrainerView: View {
     // MARK: Logic
     private func start() {
         score = 0; hits = 0; misses = 0; timeLeft = 30; isRunning = true
-        // Đặt target ngẫu nhiên
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-            // targetPos đã có sẵn
+        if playfieldSize.width > targetSize * 2 && playfieldSize.height > targetSize * 2 {
+            targetPos = randomPoint(in: playfieldSize)
         }
         stopTimer()
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
-            if timeLeft > 0 {
+            if timeLeft > 1 {
                 timeLeft -= 1
             } else {
+                timeLeft = 0
                 endGame()
             }
         }
@@ -203,10 +212,9 @@ struct CrosshairTrainerView: View {
         if dist <= threshold {
             hits += 1
             score += max(10, Int(50 - dist))
-            // Random target mới — cần dùng frame hiện tại
-            // Sẽ lấy lại từ GeometryReader trên lần render tới
-            // Đơn giản: random trong khung 300x400 (tạm)
-            targetPos = CGPoint(x: CGFloat.random(in: 60...320), y: CGFloat.random(in: 60...400))
+            if playfieldSize.width > targetSize * 2 && playfieldSize.height > targetSize * 2 {
+                targetPos = randomPoint(in: playfieldSize)
+            }
         } else {
             misses += 1
             score = max(0, score - 3)
@@ -307,7 +315,7 @@ struct GameView: View {
               bundle: "com.dts.freefireth", appStore: "https://apps.apple.com/th/app/id1300146617")
     ]
     var body: some View {
-        NavigationStack {
+        NavigationView {
             ZStack {
                 AppBackground()
                 ScrollView {
@@ -372,7 +380,6 @@ struct GameView: View {
                 }
             }
             .navigationTitle("Game")
-            .toolbarColorScheme(.dark)
         }
     }
 
@@ -391,12 +398,12 @@ struct AdminView: View {
     @EnvironmentObject private var license: LicenseManager
     @State private var confirmLogout = false
     var body: some View {
-        NavigationStack {
+        NavigationView {
             ZStack {
                 AppBackground()
                 ScrollView {
                     VStack(spacing: 16) {
-                        Image("AppIcon").resizable().scaledToFit()
+                        Image("BrandLogo").resizable().scaledToFit()
                             .frame(width: 95, height: 95)
                             .clipShape(RoundedRectangle(cornerRadius: 23))
                         Text("ADMIN MINHDUC")
@@ -430,7 +437,6 @@ struct AdminView: View {
                 }
             }
             .navigationTitle("Admin")
-            .toolbarColorScheme(.dark)
             .confirmationDialog("Bạn muốn đăng xuất?", isPresented: $confirmLogout, titleVisibility: .visible) {
                 Button("Đăng xuất và xoá key", role: .destructive) { license.logout() }
                 Button("Huỷ", role: .cancel) {}
