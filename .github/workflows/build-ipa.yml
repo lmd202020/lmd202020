@@ -17,7 +17,115 @@ concurrency:
 jobs:
   build:
     name: Build ADMIN MINHDUC
+    
+name: Build ADMIN MINHDUC IPA
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: admin-minhduc-ipa
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build ADMIN MINHDUC
     runs-on: macos-15
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: |
+          echo "Available Xcode:"
+          ls -1 /Applications | grep '^Xcode' || true
+          xcodebuild -version
+          xcode-select -p
+
+      - name: Locate project
+        id: locate
+        run: |
+          PROJECT=$(find "$GITHUB_WORKSPACE" \
+            -type d -name 'ADMINMINHDUC.xcodeproj' \
+            -print -quit)
+
+          if [ -z "$PROJECT" ]; then
+            echo "::error::Project not found"
+            exit 1
+          fi
+
+          echo "project=$PROJECT" >> "$GITHUB_OUTPUT"
+
+      - name: List schemes
+        run: |
+          xcodebuild -list \
+            -project "${{ steps.locate.outputs.project }}"
+
+      - name: Build IPA
+        id: build
+        continue-on-error: true
+        run: |
+          set -o pipefail
+
+          xcodebuild \
+            -project "${{ steps.locate.outputs.project }}" \
+            -scheme ADMINMINHDUC \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build 2>&1 | tee "$RUNNER_TEMP/build.log"
+
+      - name: Show build errors
+        if: steps.build.outcome == 'failure'
+        run: |
+          grep -n -B 5 -A 8 'error:' \
+            "$RUNNER_TEMP/build.log" | head -240 || true
+          tail -100 "$RUNNER_TEMP/build.log"
+          exit 1
+
+      - name: Package IPA
+        if: steps.build.outcome == 'success'
+        run: |
+          set -e
+
+          APP="$RUNNER_TEMP/DerivedData/Build/Products/Release-iphoneos/ADMINMINHDUC.app"
+
+          test -d "$APP"
+
+          mkdir -p Payload
+          cp -R "$APP" Payload/ADMINMINHDUC.app
+
+          zip -qry ADMIN-MINHDUC.ipa Payload
+
+      - name: Upload IPA
+        if: steps.build.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ADMIN-MINHDUC-IPA
+          path: ADMIN-MINHDUC.ipa
+          retention-days: 7
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ADMIN-MINHDUC-BUILD-LOG
+          path: ${{ runner.temp }}/build.log
+          if-no-files-found: ignore
+          retention-days: 7
+
     timeout-minutes: 45
 
     steps:
