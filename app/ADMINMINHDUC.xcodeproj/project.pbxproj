@@ -11,7 +11,7 @@
   A10000000000000000000009 /* LicenseManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LicenseManager.swift; sourceTree = "<group>"; };
   A1000000000000000000000A /* LicenseActivationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LicenseActivationView.swift; sourceTree = "<group>"; };
   A1000000000000000000000B /* MainView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainView.swift; sourceTree = "<group>"; };
-  A1000000000000000000000C /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+  A1000000000000000000000C /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = ADMINMINHDUC/Assets.xcassets; sourceTree = "<group>"; };
   A10000000000000000000004 /* Products */ = {isa = PBXGroup; children = (A1000000000000000000000D, ); name = Products; sourceTree = "<group>"; };
   A1000000000000000000000D /* ADMINMINHDUC.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ADMINMINHDUC.app; sourceTree = BUILT_PRODUCTS_DIR; };
   A1000000000000000000000E /* App.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000008; };
