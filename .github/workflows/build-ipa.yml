@@ -1,73 +1,223 @@
 
+
 name: Build ADMIN MINHDUC IPA
 
 on:
+
   workflow_dispatch:
+
   push:
+
     branches:
+
       - main
 
 permissions:
+
   contents: read
 
+concurrency:
+
+  group: admin-minhduc-build
+
+  cancel-in-progress: true
+
 jobs:
+
   build:
-    name: Build iOS IPA
+
+    name: Build ADMIN MINHDUC
+
     runs-on: macos-15-intel
 
+    timeout-minutes: 45
+
     steps:
+
       - name: Checkout Source
+
         uses: actions/checkout@v4
 
-      - name: Select Xcode
+      - name: Setup Xcode
+
         run: |
-          sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+
           xcodebuild -version
 
-      - name: Find Xcode Project
-        id: project
+          xcode-select -p
+
+      - name: Prepare AppIcon Assets
+
         run: |
-          PROJECT=$(find . -name "*.xcodeproj" -print -quit)
 
-          if [ -z "$PROJECT" ]; then
-            echo "ERROR: No Xcode project found!"
-            exit 1
-          fi
+          mkdir -p app/Assets.xcassets/AppIcon.appiconset
 
-          echo "project=$PROJECT" >> "$GITHUB_OUTPUT"
-          echo "Found: $PROJECT"
+          python3 - <<'PY'
+
+          import struct, zlib, json, os
+
+          size = 1024
+
+          rows = []
+
+          for y in range(size):
+
+              row = bytearray([0])
+
+              for x in range(size):
+
+                  r, g, b = 8, 18, 30
+
+                  # Central mint-green pixel emblem
+
+                  if 300 <= x < 724 and 300 <= y < 724:
+
+                      if (x // 106 + y // 106) % 2 == 0:
+
+                          r, g, b = 190, 225, 120
+
+                      else:
+
+                          r, g, b = 235, 245, 220
+
+                  row.extend((r, g, b, 255))
+
+              rows.append(bytes(row))
+
+          def chunk(name, data):
+
+              return (
+
+                  struct.pack(">I", len(data)) + name + data +
+
+                  struct.pack(">I", zlib.crc32(name + data) & 0xffffffff)
+
+              )
+
+          png = (
+
+              b"\x89PNG\r\n\x1a\n" +
+
+              chunk(b"IHDR", struct.pack(">2I5B",
+
+                    size, size, 8, 6, 0, 0, 0)) +
+
+              chunk(b"IDAT", zlib.compress(b"".join(rows), 9)) +
+
+              chunk(b"IEND", b"")
+
+          )
+
+          icon_dir = "app/Assets.xcassets/AppIcon.appiconset"
+
+          with open(os.path.join(icon_dir, "AppIcon.png"), "wb") as f:
+
+              f.write(png)
+
+          contents = {
+
+              "images": [{
+
+                  "filename": "AppIcon.png",
+
+                  "idiom": "universal",
+
+                  "platform": "ios",
+
+                  "size": "1024x1024"
+
+              }],
+
+              "info": {
+
+                  "author": "xcode",
+
+                  "version": 1
+
+              }
+
+          }
+
+          with open(os.path.join(icon_dir, "Contents.json"), "w") as f:
+
+              json.dump(contents, f, indent=2)
+
+          os.makedirs("app/Assets.xcassets", exist_ok=True)
+
+          with open("app/Assets.xcassets/Contents.json", "w") as f:
+
+              json.dump({"info":{"author":"xcode","version":1}}, f)
+
+          print("AppIcon generated successfully")
+
+          PY
+
+      - name: Verify Xcode Project
+
+        run: |
+
+          test -d app/ADMINMINHDUC.xcodeproj
+
+          test -f app/Assets.xcassets/AppIcon.appiconset/AppIcon.png
 
       - name: Build ADMIN MINHDUC
+
         run: |
+
+          set -o pipefail
+
           xcodebuild \
-            -project "${{ steps.project.outputs.project }}" \
+
+            -project app/ADMINMINHDUC.xcodeproj \
+
             -scheme ADMINMINHDUC \
+
             -configuration Release \
+
             -sdk iphoneos \
+
             -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+
             CODE_SIGNING_ALLOWED=NO \
+
             CODE_SIGNING_REQUIRED=NO \
+
             CODE_SIGN_IDENTITY="" \
-            build
+
+            build | tee "$RUNNER_TEMP/build.log"
 
       - name: Package IPA
-        run: |
-          APP=$(find "$RUNNER_TEMP/DerivedData/Build/Products/Release-iphoneos" \
-            -maxdepth 1 -name "*.app" -print -quit)
 
-          if [ -z "$APP" ]; then
-            echo "ERROR: Build app not found!"
+        run: |
+
+          APP="$RUNNER_TEMP/DerivedData/Build/Products/Release-iphoneos/ADMINMINHDUC.app"
+
+          if [ ! -d "$APP" ]; then
+
+            echo "ERROR: App not found"
+
             exit 1
+
           fi
 
           mkdir -p Payload
+
           cp -R "$APP" Payload/
 
           zip -qry ADMIN-MINHDUC.ipa Payload
 
+          test -s ADMIN-MINHDUC.ipa
+
       - name: Upload IPA
+
         uses: actions/upload-artifact@v4
+
         with:
+
           name: ADMIN-MINHDUC-IPA
+
           path: ADMIN-MINHDUC.ipa
+
           if-no-files-found: error
+
+          retention-days: 7
