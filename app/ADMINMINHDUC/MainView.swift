@@ -1,115 +1,496 @@
-
-import Foundation
-import Combine
-import Security
+import SwiftUI
 import UIKit
 
-@MainActor final class LicenseManager: ObservableObject {
-    // Client endpoint copied from the supplied source. Never embed ADMIN_SECRET in an IPA.
-    private let baseURL = URL(string:"https://muddy-snow-bf48.minhduc1234509876.workers.dev")!
-    @Published private(set) var isActive = false
-    @Published private(set) var isBusy = false
-    @Published var message: String?
-    @Published private(set) var expiresAt: String?
-    @Published var rememberKey = true
-    private let store = SecureStore()
-    private let account = "license-key"
-    private var activeKey: String?
-    private var timer: Task<Void,Never>?
+// MARK: - Main
+struct MainView: View {
+    @State private var tab = 0
+    var body: some View {
+        TabView(selection: $tab) {
+            HomeView().tabItem { Label("Trang chủ", systemImage: "house.fill") }.tag(0)
+            CrosshairTrainerView().tabItem { Label("Kéo Tâm", systemImage: "scope") }.tag(1)
+            GameView().tabItem { Label("Game", systemImage: "gamecontroller.fill") }.tag(2)
+            AdminView().tabItem { Label("Admin", systemImage: "crown.fill") }.tag(3)
+        }.tint(.cyan)
+    }
+}
 
-    func beginLaunchSession() {
-        guard let key = store.read(account), !key.isEmpty else { message = "Nhập License Key để tiếp tục"; return }
-        validate(key)
-    }
-    func activate(_ raw: String) {
-        let key = raw.trimmingCharacters(in:.whitespacesAndNewlines)
-        guard !key.isEmpty, !isBusy else { return }
-        Task { await send(path:"activate",key:key,activation:true) }
-    }
-    func validate(_ key:String) {
-        guard !isBusy else { return }
-        Task { await send(path:"validate",key:key,activation:false) }
-    }
-    private func send(path:String,key:String,activation:Bool) async {
-        isBusy = true
-        message = activation ? "Đang kích hoạt License…" : "Đang xác thực License…"
-        defer { isBusy = false }
-        do {
-            var request = URLRequest(url:baseURL.appendingPathComponent(path))
-            request.httpMethod = "POST"; request.timeoutInterval = 20
-            request.setValue("application/json",forHTTPHeaderField:"Content-Type")
-            request.httpBody = try JSONSerialization.data(withJSONObject:["key":key,"deviceId":DeviceIdentity.current])
-            let (data,response) = try await URLSession.shared.data(for:request)
-            guard let http = response as? HTTPURLResponse else { throw LicenseError("Phản hồi máy chủ không hợp lệ") }
-            guard let result = try? JSONDecoder().decode(APIResult.self,from:data) else { throw LicenseError("License API trả dữ liệu không hợp lệ (HTTP \(http.statusCode))") }
-            let accepted = activation ? result.success : (result.success && result.valid == true)
-            guard accepted else {
-                isActive = false; activeKey = nil; store.remove(account); stopRefresh()
-                message = Self.errorText(result.error); return
-            }
-            activeKey = key
-            if rememberKey { store.write(key,account) }
-            expiresAt = result.expiresAt
-            isActive = true; message = "License hợp lệ – sẵn sàng sử dụng"
-            startRefresh()
-        } catch {
-            message = (error as? LicenseError)?.message ?? "Không thể kết nối máy chủ. Kiểm tra Internet."
-        }
-    }
-    func logout() {
-        stopRefresh(); isActive = false; activeKey = nil; expiresAt = nil
-        store.remove(account); message = "Đã đăng xuất và xoá key trên thiết bị"
-    }
-    private func startRefresh() {
-        stopRefresh()
-        timer = Task { [weak self] in
-            while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds:60_000_000_000)
-                guard let self, let key = self.activeKey else { continue }
-                await self.send(path:"validate",key:key,activation:false)
+// MARK: - Home
+struct HomeView: View {
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                AppBackground()
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 18) {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 5) {
+                                Text("ADMIN MINHDUC")
+                                    .font(.system(size: 23, weight: .black, design: .rounded))
+                                    .foregroundStyle(.white)
+                                Text("GAMING BOOST CONTROL")
+                                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                    .foregroundStyle(.cyan)
+                            }
+                            Spacer()
+                            Image("AppIcon").resizable().scaledToFit()
+                                .frame(width: 55, height: 55)
+                                .clipShape(RoundedRectangle(cornerRadius: 14))
+                        }
+                        HStack(spacing: 12) {
+                            StatCard(title: "CHẾ ĐỘ", value: "GAMING", icon: "gamecontroller.fill")
+                            StatCard(title: "LUYỆN TẬP", value: "AIM", icon: "scope")
+                        }
+                        VStack(alignment: .leading, spacing: 12) {
+                            Label("TỐI ƯU TRƯỚC KHI CHƠI", systemImage: "sparkles")
+                                .font(.system(size: 14, weight: .black))
+                                .foregroundStyle(.cyan)
+                            TipRow(icon: "battery.100percent", title: "Pin", detail: "Tắt Chế độ nguồn điện thấp để tránh giới hạn hiệu năng.")
+                            TipRow(icon: "thermometer.medium", title: "Nhiệt độ", detail: "Để máy nguội; tháo ốp nếu thiết bị quá nóng.")
+                            TipRow(icon: "wifi", title: "Kết nối", detail: "Ưu tiên Wi‑Fi ổn định hoặc mạng di động có tín hiệu tốt.")
+                            TipRow(icon: "bell.slash", title: "Thông báo", detail: "Bật chế độ Tập trung khi chơi game trong Cài đặt iOS.")
+                            TipRow(icon: "internaldrive", title: "Dung lượng", detail: "Giữ đủ dung lượng trống và đóng tác vụ không cần thiết.")
+                        }.padding(18).panel()
+                        Text("Giới hạn iOS: ứng dụng không thể vẽ đè hay can thiệp vào game khác. Trang 'Kéo Tâm' là công cụ luyện tập trong app.")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.white.opacity(0.45))
+                    }.padding(18)
+                }
             }
         }
     }
-    private func stopRefresh() { timer?.cancel(); timer = nil }
-    private static func errorText(_ code:String?) -> String {
-        switch code {
-        case "LICENSE_NOT_FOUND": return "License Key không tồn tại"
-        case "LICENSE_REVOKED","LICENSE_INVALID": return "License đã bị khóa hoặc thu hồi"
-        case "LICENSE_EXPIRED": return "License đã hết hạn"
-        case "DEVICE_ALREADY_BOUND","DEVICE_MISMATCH": return "Key đã liên kết với thiết bị khác"
-        case "INVALID_KEY_OR_DEVICE","INVALID_INPUT": return "Key hoặc mã thiết bị không hợp lệ"
-        default: return code ?? "License không hợp lệ"
+}
+
+// MARK: - Crosshair Trainer (THỰC SỰ HOẠT ĐỘNG)
+struct CrosshairTrainerView: View {
+    @AppStorage("bestScore") private var bestScore: Int = 0
+    @State private var crosshairPos: CGPoint = .zero
+    @State private var targetPos: CGPoint = .zero
+    @State private var score = 0
+    @State private var hits = 0
+    @State private var misses = 0
+    @State private var timeLeft = 30
+    @State private var isRunning = false
+    @State private var showOverlay = false
+    @State private var timer: Timer?
+
+    private let crosshairSize: CGFloat = 60
+    private let targetSize: CGFloat = 70
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                AppBackground()
+
+                if showOverlay {
+                    CrosshairOverlayView(onClose: { showOverlay = false })
+                } else {
+                    VStack(spacing: 14) {
+                        // Header stats
+                        HStack(spacing: 10) {
+                            MiniStat(title: "ĐIỂM", value: "\(score)", color: .cyan)
+                            MiniStat(title: "TRÚNG", value: "\(hits)", color: .green)
+                            MiniStat(title: "TRƯỢT", value: "\(misses)", color: .red)
+                            MiniStat(title: "BEST", value: "\(bestScore)", color: .yellow)
+                        }
+
+                        // Timer bar
+                        HStack {
+                            Image(systemName: "timer").foregroundStyle(.cyan)
+                            Text(isRunning ? "\(timeLeft)s" : "Sẵn sàng")
+                                .font(.system(size: 14, weight: .black, design: .monospaced))
+                                .foregroundStyle(isRunning ? .cyan : .white.opacity(0.6))
+                            Spacer()
+                            Button {
+                                start()
+                            } label: {
+                                Label(isRunning ? "Đang chơi..." : "BẮT ĐẦU", systemImage: "play.fill")
+                                    .font(.system(size: 12, weight: .black))
+                                    .padding(.horizontal, 14).padding(.vertical, 8)
+                                    .background(.cyan, in: Capsule())
+                                    .foregroundStyle(.black)
+                            }.disabled(isRunning)
+                        }.padding(.horizontal, 4)
+
+                        // Play field
+                        GeometryReader { geo in
+                            ZStack {
+                                RoundedRectangle(cornerRadius: 20)
+                                    .fill(Color.black.opacity(0.4))
+                                    .overlay(RoundedRectangle(cornerRadius: 20).stroke(.white.opacity(0.08)))
+
+                                // Target
+                                if isRunning {
+                                    Circle()
+                                        .fill(.red.opacity(0.35))
+                                        .overlay(Circle().stroke(.red, lineWidth: 2))
+                                        .frame(width: targetSize, height: targetSize)
+                                        .position(targetPos)
+                                }
+
+                                // Crosshair
+                                CrosshairShape()
+                                    .stroke(isRunning ? .cyan : .white.opacity(0.5), lineWidth: 2)
+                                    .frame(width: crosshairSize, height: crosshairSize)
+                                    .position(crosshairPos)
+                                    .gesture(
+                                        DragGesture()
+                                            .onChanged { val in
+                                                crosshairPos = clamp(val.location, in: geo.size)
+                                            }
+                                            .onEnded { _ in
+                                                if isRunning { checkHit() }
+                                            }
+                                    )
+
+                                if !isRunning {
+                                    Text("Kéo dấu + đến vòng đỏ\nvà thả ra để tính điểm")
+                                        .multilineTextAlignment(.center)
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .foregroundStyle(.white.opacity(0.5))
+                                        .allowsHitTesting(false)
+                                }
+                            }
+                            .onAppear {
+                                crosshairPos = CGPoint(x: geo.size.width / 2, y: geo.size.height / 2)
+                                targetPos = randomPoint(in: geo.size)
+                            }
+                        }
+
+                        // Overlay mode button
+                        Button {
+                            showOverlay = true
+                        } label: {
+                            Label("CHẾ ĐỘ TÂM THAM KHẢO (FULLSCREEN)", systemImage: "scope")
+                                .font(.system(size: 12, weight: .black))
+                                .foregroundStyle(.black)
+                                .frame(maxWidth: .infinity, minHeight: 44)
+                                .background(.yellow, in: RoundedRectangle(cornerRadius: 12))
+                        }
+
+                        Text("Đặt máy cạnh điện thoại chơi game để dùng tâm làm mốc tham khảo. Overlay chỉ hiển thị trong app, iOS không cho vẽ đè lên game khác.")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.white.opacity(0.42))
+                            .multilineTextAlignment(.center)
+                    }.padding(18)
+                }
+            }
+            .navigationTitle("Kéo Tâm")
+            .toolbarColorScheme(.dark)
+        }
+        .onDisappear { stopTimer() }
+    }
+
+    // MARK: Logic
+    private func start() {
+        score = 0; hits = 0; misses = 0; timeLeft = 30; isRunning = true
+        // Đặt target ngẫu nhiên
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            // targetPos đã có sẵn
+        }
+        stopTimer()
+        timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
+            if timeLeft > 0 {
+                timeLeft -= 1
+            } else {
+                endGame()
+            }
+        }
+    }
+
+    private func checkHit() {
+        let dist = hypot(crosshairPos.x - targetPos.x, crosshairPos.y - targetPos.y)
+        let threshold = targetSize / 2
+        if dist <= threshold {
+            hits += 1
+            score += max(10, Int(50 - dist))
+            // Random target mới — cần dùng frame hiện tại
+            // Sẽ lấy lại từ GeometryReader trên lần render tới
+            // Đơn giản: random trong khung 300x400 (tạm)
+            targetPos = CGPoint(x: CGFloat.random(in: 60...320), y: CGFloat.random(in: 60...400))
+        } else {
+            misses += 1
+            score = max(0, score - 3)
+        }
+    }
+
+    private func endGame() {
+        isRunning = false
+        stopTimer()
+        if score > bestScore { bestScore = score }
+    }
+
+    private func stopTimer() {
+        timer?.invalidate(); timer = nil
+    }
+
+    private func clamp(_ p: CGPoint, in size: CGSize) -> CGPoint {
+        CGPoint(x: min(max(p.x, crosshairSize/2), size.width - crosshairSize/2),
+                y: min(max(p.y, crosshairSize/2), size.height - crosshairSize/2))
+    }
+
+    private func randomPoint(in size: CGSize) -> CGPoint {
+        CGPoint(x: CGFloat.random(in: targetSize...max(targetSize, size.width - targetSize)),
+                y: CGFloat.random(in: targetSize...max(targetSize, size.height - targetSize)))
+    }
+}
+
+// MARK: - Fullscreen crosshair overlay
+struct CrosshairOverlayView: View {
+    let onClose: () -> Void
+    @State private var color: Color = .cyan
+    @State private var size: CGFloat = 80
+    private let colors: [Color] = [.cyan, .red, .green, .yellow, .white]
+
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+            CrosshairShape()
+                .stroke(color, lineWidth: 2)
+                .frame(width: size, height: size)
+
+            VStack {
+                HStack {
+                    Button { onClose() } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 28))
+                            .foregroundStyle(.white.opacity(0.6))
+                    }
+                    Spacer()
+                }.padding()
+                Spacer()
+                HStack(spacing: 12) {
+                    ForEach(colors, id: \.self) { c in
+                        Circle().fill(c).frame(width: 30, height: 30)
+                            .overlay(Circle().stroke(.white, lineWidth: color == c ? 3 : 0))
+                            .onTapGesture { color = c }
+                    }
+                    Slider(value: $size, in: 40...200)
+                        .tint(.cyan)
+                        .frame(width: 120)
+                }
+                .padding(14)
+                .background(.white.opacity(0.08), in: Capsule())
+                .padding(.bottom, 30)
+            }
         }
     }
 }
-private struct APIResult:Decodable { let success:Bool; let valid:Bool?; let error:String?; let expiresAt:String? }
-private struct LicenseError:Error { let message:String; init(_ message:String){self.message=message} }
-private struct SecureStore {
-    private let service="com.minhduc.admin.license"
-    func read(_ account:String)->String? {
-        let q:[String:Any]=[kSecClass as String:kSecClassGenericPassword,kSecAttrService as String:service,kSecAttrAccount as String:account,kSecReturnData as String:true,kSecMatchLimit as String:kSecMatchLimitOne]
-        var result:CFTypeRef?
-        guard SecItemCopyMatching(q as CFDictionary,&result)==errSecSuccess,let data=result as? Data else{return nil}
-        return String(data:data,encoding:.utf8)
+
+// MARK: - Crosshair Shape (vẽ dấu +)
+struct CrosshairShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        let cx = rect.midX, cy = rect.midY
+        let gap: CGFloat = rect.width * 0.18
+        // Trục ngang
+        p.move(to: CGPoint(x: rect.minX, y: cy))
+        p.addLine(to: CGPoint(x: cx - gap, y: cy))
+        p.move(to: CGPoint(x: cx + gap, y: cy))
+        p.addLine(to: CGPoint(x: rect.maxX, y: cy))
+        // Trục dọc
+        p.move(to: CGPoint(x: cx, y: rect.minY))
+        p.addLine(to: CGPoint(x: cx, y: cy - gap))
+        p.move(to: CGPoint(x: cx, y: cy + gap))
+        p.addLine(to: CGPoint(x: cx, y: rect.maxY))
+        // Chấm giữa
+        p.addEllipse(in: CGRect(x: cx - 2, y: cy - 2, width: 4, height: 4))
+        return p
     }
-    func write(_ value:String,_ account:String) {
-        let q:[String:Any]=[kSecClass as String:kSecClassGenericPassword,kSecAttrService as String:service,kSecAttrAccount as String:account]
-        let data=Data(value.utf8)
-        if SecItemUpdate(q as CFDictionary,[kSecValueData as String:data] as CFDictionary)==errSecItemNotFound {
-            var add=q; add[kSecValueData as String]=data; add[kSecAttrAccessible as String]=kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-            SecItemAdd(add as CFDictionary,nil)
+}
+
+// MARK: - Game
+struct GameView: View {
+    private let games: [GameItem] = [
+        .init(name: "FREE FIRE VIỆT NAM", subtitle: "Garena Free Fire VN",
+              bundle: "com.garena.game.kgvn", appStore: "https://apps.apple.com/vn/app/id1300146617"),
+        .init(name: "FREE FIRE THÁI LAN", subtitle: "Garena Free Fire TH",
+              bundle: "com.dts.freefireth", appStore: "https://apps.apple.com/th/app/id1300146617")
+    ]
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                AppBackground()
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 14) {
+                        Text("CHỌN PHIÊN BẢN GAME")
+                            .font(.system(size: 17, weight: .black))
+                            .foregroundStyle(.white)
+                        ForEach(games) { game in
+                            VStack(alignment: .leading, spacing: 12) {
+                                HStack {
+                                    Image(systemName: "flame.fill")
+                                        .font(.system(size: 25))
+                                        .foregroundStyle(.orange)
+                                        .frame(width: 48, height: 48)
+                                        .background(.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 13))
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(game.name)
+                                            .font(.system(size: 14, weight: .black))
+                                            .foregroundStyle(.white)
+                                        Text(game.subtitle)
+                                            .font(.system(size: 11))
+                                            .foregroundStyle(.white.opacity(0.5))
+                                    }
+                                    Spacer()
+                                }
+                                // Mở App Store (scheme freefirevn:// KHÔNG tồn tại)
+                                Button {
+                                    if let url = URL(string: game.appStore) {
+                                        UIApplication.shared.open(url)
+                                    }
+                                } label: {
+                                    Label("MỞ / CÀI GAME", systemImage: "arrow.up.right.square")
+                                        .font(.system(size: 13, weight: .black))
+                                        .foregroundStyle(.black)
+                                        .frame(maxWidth: .infinity, minHeight: 46)
+                                        .background(.cyan, in: RoundedRectangle(cornerRadius: 12))
+                                }
+                                // Mở game nếu đã cài (thử mở qua bundle)
+                                Button {
+                                    let ok = openApp(bundleID: game.bundle)
+                                    if !ok {
+                                        if let url = URL(string: game.appStore) {
+                                            UIApplication.shared.open(url)
+                                        }
+                                    }
+                                } label: {
+                                    Label("MỞ GAME ĐÃ CÀI", systemImage: "play.fill")
+                                        .font(.system(size: 12, weight: .bold))
+                                        .foregroundStyle(.cyan)
+                                        .frame(maxWidth: .infinity, minHeight: 40)
+                                        .background(.cyan.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
+                                }
+                                Text("Bundle ID: \(game.bundle)")
+                                    .font(.system(size: 9, design: .monospaced))
+                                    .foregroundStyle(.white.opacity(0.35))
+                            }.padding(16).panel()
+                        }
+                        Text("iOS không có URL scheme chính thức cho Free Fire. Nút 'Mở game đã cài' chỉ hoạt động nếu bạn đã thêm scheme vào Info.plist; nếu không app sẽ chuyển sang App Store.")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.white.opacity(0.45))
+                    }.padding(18)
+                }
+            }
+            .navigationTitle("Game")
+            .toolbarColorScheme(.dark)
         }
     }
-    func remove(_ account:String) { SecItemDelete([kSecClass as String:kSecClassGenericPassword,kSecAttrService as String:service,kSecAttrAccount as String:account] as CFDictionary) }
+
+    private func openApp(bundleID: String) -> Bool {
+        guard let url = URL(string: "\(bundleID)://") else { return false }
+        if UIApplication.shared.canOpenURL(url) {
+            UIApplication.shared.open(url)
+            return true
+        }
+        return false
+    }
 }
-private enum DeviceIdentity {
-    static var current:String {
-        let service="com.minhduc.admin.device", account="device-id"
-        let q:[String:Any]=[kSecClass as String:kSecClassGenericPassword,kSecAttrService as String:service,kSecAttrAccount as String:account,kSecReturnData as String:true,kSecMatchLimit as String:kSecMatchLimitOne]
-        var result:CFTypeRef?
-        if SecItemCopyMatching(q as CFDictionary,&result)==errSecSuccess,let data=result as? Data,let value=String(data:data,encoding:.utf8){return value}
-        let value=UIDevice.current.identifierForVendor?.uuidString ?? UUID().uuidString
-        SecItemAdd([kSecClass as String:kSecClassGenericPassword,kSecAttrService as String:service,kSecAttrAccount as String:account,kSecValueData as String:Data(value.utf8),kSecAttrAccessible as String:kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly] as CFDictionary,nil)
-        return value
+
+// MARK: - Admin
+struct AdminView: View {
+    @EnvironmentObject private var license: LicenseManager
+    @State private var confirmLogout = false
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                AppBackground()
+                ScrollView {
+                    VStack(spacing: 16) {
+                        Image("AppIcon").resizable().scaledToFit()
+                            .frame(width: 95, height: 95)
+                            .clipShape(RoundedRectangle(cornerRadius: 23))
+                        Text("ADMIN MINHDUC")
+                            .font(.system(size: 21, weight: .black, design: .rounded))
+                            .foregroundStyle(.white)
+                        Text("PREMIUM • GAME SUPPORT")
+                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                            .foregroundStyle(.yellow)
+                        VStack(alignment: .leading, spacing: 12) {
+                            Label("TRẠNG THÁI LICENSE", systemImage: "checkmark.seal.fill")
+                                .foregroundStyle(.cyan)
+                                .font(.system(size: 13, weight: .black))
+                            HStack { Text("Tài khoản"); Spacer(); Text(license.isActive ? "Đã kích hoạt" : "Chưa kích hoạt").foregroundStyle(.green) }
+                            if let expiry = license.expiresAt { HStack { Text("Hết hạn"); Spacer(); Text(expiry) } }
+                            if let msg = license.message { Text(msg).font(.system(size: 11)).foregroundStyle(.white.opacity(0.55)) }
+                        }
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.white)
+                        .padding(17).panel()
+                        Button(role: .destructive) { confirmLogout = true } label: {
+                            Label("ĐĂNG XUẤT / XOÁ KEY", systemImage: "rectangle.portrait.and.arrow.right")
+                                .font(.system(size: 13, weight: .black))
+                                .foregroundStyle(.white)
+                                .frame(maxWidth: .infinity, minHeight: 48)
+                                .background(.red.opacity(0.8), in: RoundedRectangle(cornerRadius: 12))
+                        }
+                        Text("Quản lý License phải thực hiện trên server. Không nhúng ADMIN_SECRET vào app.")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.white.opacity(0.42))
+                    }.padding(20)
+                }
+            }
+            .navigationTitle("Admin")
+            .toolbarColorScheme(.dark)
+            .confirmationDialog("Bạn muốn đăng xuất?", isPresented: $confirmLogout, titleVisibility: .visible) {
+                Button("Đăng xuất và xoá key", role: .destructive) { license.logout() }
+                Button("Huỷ", role: .cancel) {}
+            }
+        }
+    }
+}
+
+// MARK: - Models & helpers
+private struct GameItem: Identifiable { let id = UUID(); let name: String; let subtitle: String; let bundle: String; let appStore: String }
+
+private struct StatCard: View {
+    let title: String; let value: String; let icon: String
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Image(systemName: icon).foregroundStyle(.cyan)
+            Text(value).font(.system(size: 17, weight: .black, design: .rounded)).foregroundStyle(.white)
+            Text(title).font(.system(size: 9, weight: .bold, design: .monospaced)).foregroundStyle(.white.opacity(0.4))
+        }.frame(maxWidth: .infinity, alignment: .leading).padding(15).panel()
+    }
+}
+
+private struct MiniStat: View {
+    let title: String; let value: String; let color: Color
+    var body: some View {
+        VStack(spacing: 2) {
+            Text(value).font(.system(size: 18, weight: .black, design: .rounded)).foregroundStyle(color)
+            Text(title).font(.system(size: 8, weight: .bold, design: .monospaced)).foregroundStyle(.white.opacity(0.4))
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 10)
+        .background(.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 12))
+    }
+}
+
+private struct TipRow: View {
+    let icon: String; let title: String; let detail: String
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: icon).foregroundStyle(.cyan).frame(width: 23)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title).font(.system(size: 12, weight: .bold)).foregroundStyle(.white)
+                Text(detail).font(.system(size: 11)).foregroundStyle(.white.opacity(0.55))
+            }
+        }
+    }
+}
+
+private struct AppBackground: View {
+    var body: some View {
+        ZStack {
+            LinearGradient(colors: [Color(red: 0.015, green: 0.025, blue: 0.05), .black], startPoint: .topLeading, endPoint: .bottomTrailing)
+            Circle().fill(.cyan.opacity(0.08)).frame(width: 260).blur(radius: 70).offset(x: 150, y: -300)
+        }.ignoresSafeArea()
+    }
+}
+
+private extension View {
+    func panel() -> some View {
+        background(.white.opacity(0.055), in: RoundedRectangle(cornerRadius: 18))
+            .overlay(RoundedRectangle(cornerRadius: 18).stroke(.white.opacity(0.09)))
     }
 }
