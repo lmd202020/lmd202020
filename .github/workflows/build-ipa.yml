@@ -17,66 +17,55 @@ concurrency:
 jobs:
   build:
     name: Build ADMIN MINHDUC
-    
-name: Build ADMIN MINHDUC IPA
-
-on:
-  workflow_dispatch:
-  push:
-    branches:
-      - main
-
-permissions:
-  contents: read
-
-concurrency:
-  group: admin-minhduc-ipa
-  cancel-in-progress: true
-
-jobs:
-  build:
-    name: Build ADMIN MINHDUC
-    runs-on: macos-15
-    timeout-minutes: 45
+    runs-on: macos-15-intel
 
     steps:
+      # 1. Lấy source code
       - name: Checkout source
         uses: actions/checkout@v4
 
+      # 2. Kiểm tra Xcode
       - name: Select Xcode
         run: |
-          echo "Available Xcode:"
-          ls -1 /Applications | grep '^Xcode' || true
+          sudo xcode-select -s /Applications/Xcode_16.4.app/Contents/Developer
           xcodebuild -version
-          xcode-select -p
 
-      - name: Locate project
-        id: locate
+      # 3. Tìm project Xcode
+      - name: Find Xcode project
+        id: project
+        shell: bash
         run: |
-          PROJECT=$(find "$GITHUB_WORKSPACE" \
-            -type d -name 'ADMINMINHDUC.xcodeproj' \
+          PROJECT_PATH=$(find "$GITHUB_WORKSPACE" \
+            -type d \
+            -name "ADMINMINHDUC.xcodeproj" \
             -print -quit)
 
-          if [ -z "$PROJECT" ]; then
-            echo "::error::Project not found"
+          if [ -z "$PROJECT_PATH" ]; then
+            echo "ERROR: Không tìm thấy ADMINMINHDUC.xcodeproj"
+            find "$GITHUB_WORKSPACE" -maxdepth 4 -type d
             exit 1
           fi
 
-          echo "project=$PROJECT" >> "$GITHUB_OUTPUT"
+          PROJECT_DIR=$(dirname "$PROJECT_PATH")
 
-      - name: List schemes
+          echo "PROJECT_PATH=$PROJECT_PATH" >> "$GITHUB_ENV"
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+
+          echo "Found project: $PROJECT_PATH"
+          echo "Project directory: $PROJECT_DIR"
+
+      # 4. Kiểm tra scheme
+      - name: Check Xcode scheme
         run: |
-          xcodebuild -list \
-            -project "${{ steps.locate.outputs.project }}"
+          xcodebuild -list -project "$PROJECT_PATH"
 
-      - name: Build IPA
-        id: build
-        continue-on-error: true
+      # 5. Build IPA
+      - name: Build iOS application
         run: |
           set -o pipefail
 
           xcodebuild \
-            -project "${{ steps.locate.outputs.project }}" \
+            -project "$PROJECT_PATH" \
             -scheme ADMINMINHDUC \
             -configuration Release \
             -sdk iphoneos \
@@ -85,129 +74,52 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
-            build 2>&1 | tee "$RUNNER_TEMP/build.log"
+            clean build 2>&1 | tee "$RUNNER_TEMP/build.log"
 
-      - name: Show build errors
-        if: steps.build.outcome == 'failure'
+      # 6. Kiểm tra ứng dụng đã build
+      - name: Verify app
         run: |
-          grep -n -B 5 -A 8 'error:' \
-            "$RUNNER_TEMP/build.log" | head -240 || true
-          tail -100 "$RUNNER_TEMP/build.log"
-          exit 1
+          APP_PATH="$RUNNER_TEMP/DerivedData/Build/Products/Release-iphoneos/ADMINMINHDUC.app"
 
-      - name: Package IPA
-        if: steps.build.outcome == 'success'
-        run: |
-          set -e
-
-          APP="$RUNNER_TEMP/DerivedData/Build/Products/Release-iphoneos/ADMINMINHDUC.app"
-
-          test -d "$APP"
-
-          mkdir -p Payload
-          cp -R "$APP" Payload/ADMINMINHDUC.app
-
-          zip -qry ADMIN-MINHDUC.ipa Payload
-
-      - name: Upload IPA
-        if: steps.build.outcome == 'success'
-        uses: actions/upload-artifact@v4
-        with:
-          name: ADMIN-MINHDUC-IPA
-          path: ADMIN-MINHDUC.ipa
-          retention-days: 7
-
-      - name: Upload build log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ADMIN-MINHDUC-BUILD-LOG
-          path: ${{ runner.temp }}/build.log
-          if-no-files-found: ignore
-          retention-days: 7
-
-    timeout-minutes: 45
-
-    steps:
-      - name: Checkout source
-        uses: actions/checkout@v4
-
-      - name: Select Xcode
-        run: |
-          echo "Available Xcode:"
-          ls -1 /Applications | grep '^Xcode' || true
-          xcodebuild -version
-          xcode-select -p
-
-      - name: Locate project
-        id: locate
-        run: |
-          PROJECT=$(find "$GITHUB_WORKSPACE" \
-            -type d -name 'ADMINMINHDUC.xcodeproj' \
-            -print -quit)
-
-          if [ -z "$PROJECT" ]; then
-            echo "::error::Project not found"
+          if [ ! -d "$APP_PATH" ]; then
+            echo "ERROR: Không tìm thấy ADMINMINHDUC.app"
             exit 1
           fi
 
-          echo "project=$PROJECT" >> "$GITHUB_OUTPUT"
+          echo "Build app thành công:"
+          ls -la "$APP_PATH"
 
-      - name: List schemes
-        run: |
-          xcodebuild -list \
-            -project "${{ steps.locate.outputs.project }}"
-
-      - name: Build IPA
-        id: build
-        continue-on-error: true
-        run: |
-          set -o pipefail
-
-          xcodebuild \
-            -project "${{ steps.locate.outputs.project }}" \
-            -scheme ADMINMINHDUC \
-            -configuration Release \
-            -sdk iphoneos \
-            -destination 'generic/platform=iOS' \
-            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_IDENTITY="" \
-            build 2>&1 | tee "$RUNNER_TEMP/build.log"
-
-      - name: Show build errors
-        if: steps.build.outcome == 'failure'
-        run: |
-          grep -n -B 5 -A 8 'error:' \
-            "$RUNNER_TEMP/build.log" | head -240 || true
-          tail -100 "$RUNNER_TEMP/build.log"
-          exit 1
-
+      # 7. Đóng gói IPA
       - name: Package IPA
-        if: steps.build.outcome == 'success'
         run: |
-          set -e
+          APP_PATH="$RUNNER_TEMP/DerivedData/Build/Products/Release-iphoneos/ADMINMINHDUC.app"
+          PACKAGE_DIR="$RUNNER_TEMP/IPA_PACKAGE"
 
-          APP="$RUNNER_TEMP/DerivedData/Build/Products/Release-iphoneos/ADMINMINHDUC.app"
+          mkdir -p "$PACKAGE_DIR/Payload"
 
-          test -d "$APP"
+          cp -R "$APP_PATH" "$PACKAGE_DIR/Payload/"
 
-          mkdir -p Payload
-          cp -R "$APP" Payload/ADMINMINHDUC.app
+          cd "$PACKAGE_DIR"
 
-          zip -qry ADMIN-MINHDUC.ipa Payload
+          /usr/bin/ditto -c -k --sequesterRsrc --keepParent \
+            Payload \
+            "$GITHUB_WORKSPACE/ADMIN-MINHDUC.ipa"
 
-      - name: Upload IPA
-        if: steps.build.outcome == 'success'
+          echo "IPA đã được tạo:"
+          ls -lh "$GITHUB_WORKSPACE/ADMIN-MINHDUC.ipa"
+
+      # 8. Lưu IPA lên GitHub Actions
+      - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
           name: ADMIN-MINHDUC-IPA
           path: ADMIN-MINHDUC.ipa
+          if-no-files-found: error
           retention-days: 7
 
-      - name: Upload build log
-        if: always()
+      # 9. Lưu log nếu build thất bại
+      - name: Upload build log on failure
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: ADMIN-MINHDUC-BUILD-LOG
