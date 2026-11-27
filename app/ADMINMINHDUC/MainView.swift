@@ -7,9 +7,12 @@ struct MainView: View {
     var body: some View {
         TabView(selection: $tab) {
             HomeView().tabItem { Label("Trang chủ", systemImage: "house.fill") }.tag(0)
-            CrosshairTrainerView().tabItem { Label("Kéo Tâm", systemImage: "scope") }.tag(1)
-            GameView().tabItem { Label("Game", systemImage: "gamecontroller.fill") }.tag(2)
-            AdminView().tabItem { Label("Admin", systemImage: "crown.fill") }.tag(3)
+            CrosshairTrainerView().tabItem { Label("Luyện tâm", systemImage: "scope") }.tag(1)
+            SensitivityView().tabItem { Label("Độ nhạy", systemImage: "slider.horizontal.3") }.tag(2)
+            PerformanceView().tabItem { Label("Tối ưu", systemImage: "speedometer") }.tag(3)
+            CleanerView().tabItem { Label("Dọn dẹp", systemImage: "trash") }.tag(4)
+            GameView().tabItem { Label("Game", systemImage: "gamecontroller.fill") }.tag(5)
+            AdminView().tabItem { Label("Cài đặt", systemImage: "gearshape.fill") }.tag(6)
         }.tint(.cyan)
     }
 }
@@ -24,10 +27,10 @@ struct HomeView: View {
                     VStack(alignment: .leading, spacing: 18) {
                         HStack {
                             VStack(alignment: .leading, spacing: 5) {
-                                Text("ADMIN MINHDUC")
+                                Text("MINHDUC AIM SUPPORT PRO")
                                     .font(.system(size: 23, weight: .black, design: .rounded))
                                     .foregroundStyle(.white)
-                                Text("GAMING BOOST CONTROL")
+                                Text("AIM TRAINER • DEVICE CARE")
                                     .font(.system(size: 10, weight: .bold, design: .monospaced))
                                     .foregroundStyle(.cyan)
                             }
@@ -306,6 +309,100 @@ struct CrosshairShape: Shape {
     }
 }
 
+
+// MARK: - Free Fire Sensitivity Profiles (0–200)
+struct SensitivityView: View {
+    @AppStorage("ff_sens_general") private var general: Double = 185
+    @AppStorage("ff_sens_red_dot") private var redDot: Double = 180
+    @AppStorage("ff_sens_2x") private var scope2x: Double = 175
+    @AppStorage("ff_sens_4x") private var scope4x: Double = 165
+    @AppStorage("ff_sens_sniper") private var sniper: Double = 90
+    @AppStorage("ff_sens_free_look") private var freeLook: Double = 150
+    @State private var selectedPreset = "Tùy chỉnh"
+    @State private var copied = false
+
+    var body: some View {
+        NavigationView {
+            ZStack {
+                AppBackground()
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("FREE FIRE • SENSITIVITY").font(.system(size: 19, weight: .black, design: .rounded)).foregroundStyle(.white)
+                            Text("Tùy chỉnh hồ sơ độ nhạy theo thang 0–200").font(.system(size: 12, weight: .medium)).foregroundStyle(.cyan)
+                            Text("Giá trị được lưu trên iPhone để bạn tham khảo và nhập thủ công trong game.").font(.system(size: 10)).foregroundStyle(.white.opacity(0.5))
+                        }
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("CHỌN PRESET").font(.system(size: 12, weight: .black)).foregroundStyle(.cyan)
+                            HStack(spacing: 8) { presetButton("Kéo tâm nhẹ"); presetButton("Headshot") }
+                            HStack(spacing: 8) { presetButton("Nhanh"); presetButton("Cân bằng") }
+                        }.padding(15).panel()
+                        VStack(spacing: 18) {
+                            sensitivitySlider(title: "Tổng quan", subtitle: "Camera và xoay góc nhìn", value: $general)
+                            sensitivitySlider(title: "Red Dot", subtitle: "Ngắm không dùng ống ngắm", value: $redDot)
+                            sensitivitySlider(title: "Ống ngắm 2X", subtitle: "Độ nhạy scope 2X", value: $scope2x)
+                            sensitivitySlider(title: "Ống ngắm 4X", subtitle: "Độ nhạy scope 4X", value: $scope4x)
+                            sensitivitySlider(title: "Ống ngắm súng ngắm", subtitle: "Ngắm tầm xa", value: $sniper)
+                            sensitivitySlider(title: "Nhìn xung quanh", subtitle: "Quan sát môi trường", value: $freeLook)
+                        }.padding(16).panel()
+                        Button { UIPasteboard.general.string = clipboardText; copied = true } label: {
+                            Label(copied ? "ĐÃ SAO CHÉP HỒ SƠ" : "SAO CHÉP ĐỘ NHẠY", systemImage: copied ? "checkmark" : "doc.on.doc")
+                                .font(.system(size: 13, weight: .black)).foregroundStyle(.black).frame(maxWidth: .infinity, minHeight: 48)
+                                .background(.cyan, in: RoundedRectangle(cornerRadius: 12))
+                        }
+                        Text("Preset là giá trị tham khảo; hiệu quả tùy thiết bị và thói quen chơi. Ứng dụng không tự ghi cấu hình vào Free Fire.").font(.system(size: 10)).foregroundStyle(.white.opacity(0.42))
+                    }.padding(18)
+                }
+            }.navigationTitle("Độ nhạy Free Fire")
+        }
+    }
+
+    private var clipboardText: String {
+        """
+        MINHDUC AIM SUPPORT PRO — FREE FIRE
+        Tổng quan: \(Int(general))
+        Red Dot: \(Int(redDot))
+        Ống ngắm 2X: \(Int(scope2x))
+        Ống ngắm 4X: \(Int(scope4x))
+        Ống ngắm súng ngắm: \(Int(sniper))
+        Nhìn xung quanh: \(Int(freeLook))
+        Thang độ nhạy: 0–200
+        """
+    }
+
+    private func presetButton(_ name: String) -> some View {
+        Button {
+            selectedPreset = name
+            switch name {
+            case "Kéo tâm nhẹ": general = 175; redDot = 170; scope2x = 165; scope4x = 155; sniper = 80; freeLook = 140
+            case "Headshot": general = 195; redDot = 190; scope2x = 185; scope4x = 175; sniper = 95; freeLook = 160
+            case "Nhanh": general = 200; redDot = 195; scope2x = 190; scope4x = 180; sniper = 105; freeLook = 175
+            default: general = 185; redDot = 180; scope2x = 175; scope4x = 165; sniper = 90; freeLook = 150
+            }
+        } label: {
+            Text(name).font(.system(size: 11, weight: .bold)).foregroundStyle(selectedPreset == name ? .black : .white)
+                .frame(maxWidth: .infinity, minHeight: 38)
+                .background(selectedPreset == name ? Color.cyan : Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 9))
+        }
+    }
+
+    private func sensitivitySlider(title: String, subtitle: String, value: Binding<Double>) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title).font(.system(size: 13, weight: .bold)).foregroundStyle(.white)
+                    Text(subtitle).font(.system(size: 9)).foregroundStyle(.white.opacity(0.45))
+                }
+                Spacer()
+                Text("\(Int(value.wrappedValue))").font(.system(size: 20, weight: .black, design: .rounded)).monospacedDigit().foregroundStyle(.cyan)
+            }
+            Slider(value: value, in: 0...200, step: 1).tint(.cyan)
+            HStack { Text("0"); Spacer(); Text("TỐI ĐA 200") }.font(.system(size: 8, weight: .bold, design: .monospaced)).foregroundStyle(.white.opacity(0.35))
+        }
+    }
+}
+
+
 // MARK: - Game
 struct GameView: View {
     private let games: [GameItem] = [
@@ -406,10 +503,10 @@ struct AdminView: View {
                         Image("BrandLogo").resizable().scaledToFit()
                             .frame(width: 95, height: 95)
                             .clipShape(RoundedRectangle(cornerRadius: 23))
-                        Text("ADMIN MINHDUC")
+                        Text("MINHDUC AIM SUPPORT PRO")
                             .font(.system(size: 21, weight: .black, design: .rounded))
                             .foregroundStyle(.white)
-                        Text("PREMIUM • GAME SUPPORT")
+                        Text("AIM SUPPORT • DEVICE TOOLS")
                             .font(.system(size: 10, weight: .bold, design: .monospaced))
                             .foregroundStyle(.yellow)
                         VStack(alignment: .leading, spacing: 12) {
@@ -442,6 +539,117 @@ struct AdminView: View {
                 Button("Huỷ", role: .cancel) {}
             }
         }
+    }
+}
+
+
+// MARK: - Performance support (safe iOS settings guidance)
+struct PerformanceView: View {
+    private let tips: [(String, String, String)] = [
+        ("thermometer.medium", "Giữ nhiệt độ ổn định", "Tránh vừa sạc vừa chơi trong thời gian dài; để máy nguội nếu nóng."),
+        ("battery.100percent", "Kiểm tra pin", "Tắt Chế độ nguồn điện thấp khi cần hiệu năng ổn định."),
+        ("wifi", "Ổn định kết nối", "Dùng Wi‑Fi ổn định, đứng gần router và hạn chế tải nền."),
+        ("moon.fill", "Tập trung khi chơi", "Bật chế độ Tập trung để giảm thông báo làm gián đoạn."),
+        ("internaldrive", "Giữ bộ nhớ trống", "Duy trì dung lượng trống phù hợp để iOS hoạt động ổn định.")
+    ]
+    var body: some View {
+        NavigationView {
+            ZStack {
+                AppBackground()
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 15) {
+                        Text("TỐI ƯU TRẢI NGHIỆM").font(.system(size: 20, weight: .black)).foregroundStyle(.white)
+                        Text("Các bước hỗ trợ giảm tình trạng giật, nóng máy và gián đoạn khi chơi game. Đây là hướng dẫn an toàn, không ép xung CPU/GPU.")
+                            .font(.system(size: 12)).foregroundStyle(.white.opacity(0.55))
+                        ForEach(tips.indices, id: \.self) { index in
+                            let item = tips[index]
+                            TipRow(icon: item.0, title: item.1, detail: item.2)
+                                .padding(15).panel()
+                        }
+                        Button {
+                            if let url = URL(string: UIApplication.openSettingsURLString) {
+                                UIApplication.shared.open(url)
+                            }
+                        } label: {
+                            Label("MỞ CÀI ĐẶT IPHONE", systemImage: "gearshape.fill")
+                                .font(.system(size: 13, weight: .black))
+                                .foregroundStyle(.black).frame(maxWidth: .infinity, minHeight: 48)
+                                .background(.cyan, in: RoundedRectangle(cornerRadius: 12))
+                        }
+                        Text("Ứng dụng không thể tự tăng FPS, thay đổi xung nhịp, nhiệt độ hoặc ping của game khác.")
+                            .font(.system(size: 10)).foregroundStyle(.white.opacity(0.4))
+                    }.padding(18)
+                }
+            }.navigationTitle("Mượt máy • Fix lag")
+        }
+    }
+}
+
+// MARK: - App storage cleaner (only this app's cache)
+struct CleanerView: View {
+    @State private var cacheBytes: Int64 = 0
+    @State private var status = "Chỉ dọn bộ nhớ đệm của MINHDUC AIM SUPPORT PRO."
+    @State private var showConfirm = false
+
+    var body: some View {
+        NavigationView {
+            ZStack {
+                AppBackground()
+                VStack(spacing: 18) {
+                    Image(systemName: "trash.circle.fill").font(.system(size: 58)).foregroundStyle(.cyan)
+                    Text("DỌN DẸP BỘ NHỚ ĐỆM").font(.system(size: 19, weight: .black)).foregroundStyle(.white)
+                    VStack(spacing: 6) {
+                        Text(ByteCountFormatter.string(fromByteCount: cacheBytes, countStyle: .file))
+                            .font(.system(size: 30, weight: .black, design: .rounded)).foregroundStyle(.cyan)
+                        Text("Dung lượng cache của ứng dụng").font(.system(size: 11)).foregroundStyle(.white.opacity(0.5))
+                    }.frame(maxWidth: .infinity).padding(20).panel()
+                    Button { showConfirm = true } label: {
+                        Label("DỌN CACHE ỨNG DỤNG", systemImage: "sparkles")
+                            .font(.system(size: 13, weight: .black)).foregroundStyle(.black)
+                            .frame(maxWidth: .infinity, minHeight: 48)
+                            .background(.cyan, in: RoundedRectangle(cornerRadius: 12))
+                    }
+                    Text(status).font(.system(size: 11)).foregroundStyle(.white.opacity(0.6)).multilineTextAlignment(.center)
+                    Text("iOS không cho ứng dụng xóa dữ liệu hoặc cache của ứng dụng khác. Ảnh, video và tệp cá nhân không bị xóa.")
+                        .font(.system(size: 10)).foregroundStyle(.white.opacity(0.4)).multilineTextAlignment(.center)
+                    Spacer()
+                }.padding(20)
+            }
+            .navigationTitle("Dọn rác")
+            .onAppear { refreshSize() }
+            .confirmationDialog("Xóa cache của ứng dụng này?", isPresented: $showConfirm, titleVisibility: .visible) {
+                Button("Xóa cache", role: .destructive) { clearCache() }
+                Button("Hủy", role: .cancel) {}
+            }
+        }
+    }
+
+    private func refreshSize() {
+        let urls = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)
+        cacheBytes = urls.first.map(folderSize) ?? 0
+    }
+    private func folderSize(_ url: URL) -> Int64 {
+        guard let enumerator = FileManager.default.enumerator(at: url, includingPropertiesForKeys: [.fileSizeKey]) else { return 0 }
+        var total: Int64 = 0
+        for case let file as URL in enumerator {
+            total += Int64((try? file.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)
+        }
+        return total
+    }
+    private func clearCache() {
+        let manager = FileManager.default
+        let urls = manager.urls(for: .cachesDirectory, in: .userDomainMask)
+        do {
+            if let cache = urls.first {
+                for item in try manager.contentsOfDirectory(at: cache, includingPropertiesForKeys: nil) {
+                    try manager.removeItem(at: item)
+                }
+            }
+            status = "Đã dọn cache của ứng dụng."
+        } catch {
+            status = "Không thể dọn một số tệp cache: \(error.localizedDescription)"
+        }
+        refreshSize()
     }
 }
 

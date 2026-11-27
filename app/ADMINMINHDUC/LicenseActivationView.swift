@@ -12,8 +12,8 @@ struct LicenseActivationView:View {
                 Spacer(minLength:55)
                 Image("AppIcon").resizable().scaledToFit().frame(width:104,height:104).clipShape(RoundedRectangle(cornerRadius:24)).overlay(RoundedRectangle(cornerRadius:24).stroke(.yellow.opacity(0.8),lineWidth:1.4))
                 VStack(spacing:6) {
-                    Text("ADMIN MINHDUC").font(.system(size:27,weight:.black,design:.rounded)).tracking(1.5).foregroundStyle(.white)
-                    Text("GAMING PERFORMANCE • PREMIUM").font(.system(size:10,weight:.bold,design:.monospaced)).tracking(1.5).foregroundStyle(.cyan)
+                    Text("MINHDUC AIM SUPPORT PRO").font(.system(size:27,weight:.black,design:.rounded)).tracking(1.5).foregroundStyle(.white)
+                    Text("AIM TRAINER • DEVICE CARE").font(.system(size:10,weight:.bold,design:.monospaced)).tracking(1.5).foregroundStyle(.cyan)
                 }
                 VStack(alignment:.leading,spacing:16) {
                     Label("KÍCH HOẠT LICENSE",systemImage:"key.fill").font(.system(size:15,weight:.black)).foregroundStyle(.yellow)
@@ -31,8 +31,8 @@ struct LicenseActivationView:View {
                     if let message=license.message { Text(message).font(.system(size:12,weight:.medium)).foregroundStyle(message.contains("hợp lệ") ? .green : .orange).fixedSize(horizontal:false,vertical:true) }
                 }.padding(20).background(.white.opacity(0.055),in:RoundedRectangle(cornerRadius:22)).overlay(RoundedRectangle(cornerRadius:22).stroke(.white.opacity(0.12)))
                 VStack(spacing:5) {
-                    Text("FREE FIRE VN • FREE FIRE TH").font(.system(size:10,weight:.bold,design:.monospaced)).foregroundStyle(.white.opacity(0.45))
-                    Text("ADMIN MINHDUC | LICENSE PROTECTED").font(.system(size:9,weight:.medium,design:.monospaced)).foregroundStyle(.white.opacity(0.3))
+                    Text("IPHONE • IPAD • MULTI-DEVICE").font(.system(size:10,weight:.bold,design:.monospaced)).foregroundStyle(.white.opacity(0.45))
+                    Text("MINHDUC AIM SUPPORT PRO | LICENSE PROTECTED").font(.system(size:9,weight:.medium,design:.monospaced)).foregroundStyle(.white.opacity(0.3))
                 }
                 Spacer(minLength:35)
             }.padding(.horizontal,24) }
