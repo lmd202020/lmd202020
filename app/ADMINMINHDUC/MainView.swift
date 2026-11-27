@@ -22,7 +22,6 @@ struct MainView: View {
                 .tabItem { Label("Độ Nhạy", systemImage: "scope") }.tag(4)
         }
         .tint(.cyan)
-        .toolbarBackground(.hidden, for: .tabBar)
         .background(AppBackground().ignoresSafeArea())
         .fullScreenCover(isPresented: $showDeviceSetup) {
             DeviceSetupView { showDeviceSetup = false }
@@ -209,7 +208,7 @@ struct HomeView: View {
     private let device = DeviceProfileInfo.detect()
 
     var body: some View {
-        NavigationStack {
+        NavigationView {
             ZStack {
                 AppBackground().ignoresSafeArea()
                 ScrollView(.vertical, showsIndicators: false) {
@@ -267,7 +266,7 @@ struct HomeView: View {
                     }.padding(18)
                 }
             }
-            .toolbar(.hidden, for: .navigationBar)
+            .navigationBarHidden(true)
         }
     }
 
@@ -576,7 +575,6 @@ struct SensitivityView: View {
                                 .font(.system(size: 10, design: .monospaced)).foregroundStyle(.white.opacity(0.45))
                         }.padding(15).panel()
                         VStack(alignment: .leading, spacing: 10) {
-                            let detected = DeviceProfileInfo.detect()
                             Label("ĐỀ XUẤT THEO THIẾT BỊ", systemImage: "iphone.gen3")
                                 .font(.system(size: 12, weight: .black)).foregroundStyle(.cyan)
                             Text("\\(detected.marketingName) • \\(detected.category) • iOS \\(detected.iosVersion)")
@@ -718,7 +716,7 @@ struct GameView: View {
     @State private var launchMessage = ""
 
     var body: some View {
-        NavigationStack {
+        NavigationView {
             ZStack {
                 AppBackground().ignoresSafeArea()
                 ScrollView(.vertical, showsIndicators: false) {
@@ -768,7 +766,7 @@ struct GameView: View {
                     }.padding(18)
                 }
             }
-            .toolbar(.hidden, for: .navigationBar)
+            .navigationBarHidden(true)
         }
     }
 
@@ -804,7 +802,7 @@ struct DeviceOptimizationView: View {
     @AppStorage("md_config_storage_checked") private var storageGuide = true
 
     var body: some View {
-        NavigationStack {
+        NavigationView {
             ZStack {
                 AppBackground().ignoresSafeArea()
                 ScrollView(.vertical, showsIndicators: false) {
@@ -840,7 +838,7 @@ struct DeviceOptimizationView: View {
                         }
                     }.padding(18)
                 }
-            }.toolbar(.hidden, for: .navigationBar)
+            }.navigationBarHidden(true)
         }
     }
 
@@ -859,7 +857,7 @@ struct LagReductionView: View {
     @AppStorage("md_lag_game_checked") private var gameGuide = true
 
     var body: some View {
-        NavigationStack {
+        NavigationView {
             ZStack {
                 AppBackground().ignoresSafeArea()
                 ScrollView(.vertical, showsIndicators: false) {
@@ -895,7 +893,7 @@ struct LagReductionView: View {
                         }
                     }.padding(18)
                 }
-            }.toolbar(.hidden, for: .navigationBar)
+            }.navigationBarHidden(true)
         }
     }
 
