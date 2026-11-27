@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import Darwin
 
 // MARK: - Main
 struct MainView: View {
@@ -13,7 +14,183 @@ struct MainView: View {
             CleanerView().tabItem { Label("Dọn dẹp", systemImage: "trash") }.tag(4)
             GameView().tabItem { Label("Game", systemImage: "gamecontroller.fill") }.tag(5)
             AdminView().tabItem { Label("Cài đặt", systemImage: "gearshape.fill") }.tag(6)
-        }.tint(.cyan)
+        }
+        .tint(.cyan)
+        .toolbarBackground(.hidden, for: .tabBar)
+        .ignoresSafeArea(.keyboard, edges: .bottom)
+        .background(AppBackground().ignoresSafeArea())
+        .fullScreenCover(isPresented: $showDeviceSetup) {
+            DeviceSetupView {
+                showDeviceSetup = false
+            }
+        }
+        .onAppear {
+            if !deviceSetupCompleted { showDeviceSetup = true }
+        }
+    }
+
+    @AppStorage("md_device_setup_completed") private var deviceSetupCompleted = false
+    @State private var showDeviceSetup = false
+}
+
+
+// MARK: - Device recognition and demo sensitivity onboarding
+private struct DeviceProfileInfo {
+    let marketingName: String
+    let machineIdentifier: String
+    let iosVersion: String
+    let category: String
+    let recommendedValues: [Double]
+
+    static func detect() -> DeviceProfileInfo {
+        var system = utsname()
+        uname(&system)
+        let identifier = withUnsafePointer(to: &system.machine) {
+            $0.withMemoryRebound(to: CChar.self, capacity: 1) { String(cString: $0) }
+        }
+        let name = UIDevice.current.model
+        let version = UIDevice.current.systemVersion
+        let proMaxModels: Set<String> = ["iPhone15,3", "iPhone16,2", "iPhone17,2"]
+        let proModels: Set<String> = ["iPhone15,2", "iPhone16,1", "iPhone17,1"]
+        let isProMax = proMaxModels.contains(identifier)
+        let isPro = proModels.contains(identifier)
+        let isOlder = identifier.hasPrefix("iPhone10,") || identifier.hasPrefix("iPhone11,") || identifier.hasPrefix("iPhone12,")
+        let category = isProMax ? "Nhóm Pro Max" : (isPro ? "Nhóm Pro" : (isOlder ? "Nhóm iPhone đời cũ" : "Nhóm iPhone tiêu chuẩn / đời mới"))
+        let values: [Double]
+        if isProMax {
+            values = [190, 188, 180, 170, 95, 160]
+        } else if isPro {
+            values = [188, 185, 178, 168, 92, 155]
+        } else if isOlder {
+            values = [178, 175, 165, 155, 82, 145]
+        } else {
+            values = [185, 182, 175, 165, 88, 150]
+        }
+        return DeviceProfileInfo(
+            marketingName: name,
+            machineIdentifier: identifier,
+            iosVersion: version,
+            category: category,
+            recommendedValues: values
+        )
+    }
+}
+
+private struct DeviceSetupView: View {
+    let onFinish: () -> Void
+    @AppStorage("ff_sens_general") private var general: Double = 185
+    @AppStorage("ff_sens_red_dot") private var redDot: Double = 180
+    @AppStorage("ff_sens_2x") private var scope2x: Double = 175
+    @AppStorage("ff_sens_4x") private var scope4x: Double = 165
+    @AppStorage("ff_sens_sniper") private var sniper: Double = 90
+    @AppStorage("ff_sens_free_look") private var freeLook: Double = 150
+    @AppStorage("md_device_setup_completed") private var completed = false
+    @State private var gameVersion = "VN"
+    @State private var applied = false
+    private let device = DeviceProfileInfo.detect()
+
+    var body: some View {
+        ZStack {
+            AppBackground().ignoresSafeArea()
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(spacing: 20) {
+                    Spacer(minLength: 18)
+                    Image(systemName: "iphone.gen3.radiowaves.left.and.right")
+                        .font(.system(size: 48, weight: .light))
+                        .foregroundStyle(.cyan)
+                        .frame(width: 104, height: 104)
+                        .background(.cyan.opacity(0.12), in: RoundedRectangle(cornerRadius: 28))
+                        .overlay(RoundedRectangle(cornerRadius: 28).stroke(.cyan.opacity(0.45)))
+                    VStack(spacing: 7) {
+                        Text("NHẬN DIỆN THIẾT BỊ")
+                            .font(.system(size: 23, weight: .black, design: .rounded))
+                            .foregroundStyle(.white)
+                        Text("MINHDUC AIM SUPPORT PRO")
+                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                            .tracking(1.5).foregroundStyle(.cyan)
+                    }
+                    VStack(alignment: .leading, spacing: 12) {
+                        Label("THIẾT BỊ ĐÃ NHẬN DIỆN", systemImage: "checkmark.seal.fill")
+                            .font(.system(size: 12, weight: .black)).foregroundStyle(.green)
+                        deviceRow("Tên thiết bị", device.marketingName)
+                        deviceRow("Mã máy", device.machineIdentifier)
+                        deviceRow("Phiên bản iOS", device.iosVersion)
+                        deviceRow("Nhóm thiết bị", device.category)
+                    }.padding(17).panel()
+
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("CHỌN PHIÊN BẢN FREE FIRE")
+                            .font(.system(size: 12, weight: .black)).foregroundStyle(.cyan)
+                        Picker("Game", selection: $gameVersion) {
+                            Text("FREE FIRE VN").tag("VN")
+                            Text("FREE FIRE TH").tag("TH")
+                        }.pickerStyle(.segmented)
+                        Text(gameVersion == "VN" ? "com.garena.ffvn" : "com.dts.freefireth")
+                            .font(.system(size: 10, design: .monospaced)).foregroundStyle(.white.opacity(0.5))
+                    }.padding(17).panel()
+
+                    VStack(alignment: .leading, spacing: 11) {
+                        Label("HỒ SƠ ĐỘ NHẠY DEMO ĐỀ XUẤT", systemImage: "scope")
+                            .font(.system(size: 12, weight: .black)).foregroundStyle(.cyan)
+                        Text("Được chọn theo nhóm thiết bị. Bạn có thể chỉnh lại sau trong tab Độ nhạy.")
+                            .font(.system(size: 10)).foregroundStyle(.white.opacity(0.55))
+                        let labels = ["Tổng quan", "Red Dot", "Ống ngắm 2X", "Ống ngắm 4X", "Ống ngắm súng ngắm", "Nhìn xung quanh"]
+                        ForEach(Array(labels.enumerated()), id: \.offset) { index, label in
+                            HStack {
+                                Text(label).font(.system(size: 11, weight: .medium)).foregroundStyle(.white.opacity(0.8))
+                                Spacer()
+                                Text("\(Int(device.recommendedValues[index]))")
+                                    .font(.system(size: 15, weight: .black, design: .rounded))
+                                    .monospacedDigit().foregroundStyle(.cyan)
+                            }
+                        }
+                        Text("THANG ĐỘ NHẠY 0–200")
+                            .font(.system(size: 9, weight: .bold, design: .monospaced))
+                            .foregroundStyle(.white.opacity(0.4))
+                    }.padding(17).panel()
+
+                    Button {
+                        applyRecommendedProfile()
+                        completed = true
+                        applied = true
+                        onFinish()
+                    } label: {
+                        Label("ÁP DỤNG HỒ SƠ DEMO & TIẾP TỤC", systemImage: "checkmark.circle.fill")
+                            .font(.system(size: 13, weight: .black))
+                            .foregroundStyle(.black)
+                            .frame(maxWidth: .infinity, minHeight: 54)
+                            .background(LinearGradient(colors: [.cyan, .mint], startPoint: .leading, endPoint: .trailing), in: RoundedRectangle(cornerRadius: 15))
+                    }
+                    Text("Đây là thông số tham khảo để thử nghiệm, không phải độ nhạy được game tự động xác nhận. Ứng dụng không đọc hoặc sửa dữ liệu riêng của Free Fire.")
+                        .font(.system(size: 9)).foregroundStyle(.white.opacity(0.42))
+                        Spacer(minLength: 20)
+                    }
+                .padding(.horizontal, 20)
+                .padding(.top, 16)
+                .padding(.bottom, 30)
+            }
+        }
+        .statusBarHidden(false)
+    }
+
+    private func deviceRow(_ title: String, _ value: String) -> some View {
+        HStack {
+            Text(title).font(.system(size: 11)).foregroundStyle(.white.opacity(0.5))
+            Spacer()
+            Text(value).font(.system(size: 11, weight: .semibold)).foregroundStyle(.white)
+                .multilineTextAlignment(.trailing)
+        }
+    }
+
+    private func applyRecommendedProfile() {
+        general = device.recommendedValues[0]
+        redDot = device.recommendedValues[1]
+        scope2x = device.recommendedValues[2]
+        scope4x = device.recommendedValues[3]
+        sniper = device.recommendedValues[4]
+        freeLook = device.recommendedValues[5]
+        UserDefaults.standard.set(gameVersion, forKey: "md_selected_ff_version")
+        UserDefaults.standard.set(true, forKey: "md_demo_profile_applied")
     }
 }
 
@@ -22,8 +199,8 @@ struct HomeView: View {
     var body: some View {
         NavigationView {
             ZStack {
-                AppBackground()
-                ScrollView {
+                AppBackground().ignoresSafeArea()
+                ScrollView(.vertical, showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 18) {
                         HStack {
                             VStack(alignment: .leading, spacing: 5) {
@@ -320,18 +497,30 @@ struct SensitivityView: View {
     @AppStorage("ff_sens_free_look") private var freeLook: Double = 150
     @State private var selectedPreset = "Tùy chỉnh"
     @State private var copied = false
+    @State private var selectedGame = "VN"
+    @State private var launchStatus = ""
 
     var body: some View {
         NavigationView {
             ZStack {
-                AppBackground()
-                ScrollView {
+                AppBackground().ignoresSafeArea()
+                ScrollView(.vertical, showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 16) {
                         VStack(alignment: .leading, spacing: 6) {
                             Text("FREE FIRE • SENSITIVITY").font(.system(size: 19, weight: .black, design: .rounded)).foregroundStyle(.white)
                             Text("Tùy chỉnh hồ sơ độ nhạy theo thang 0–200").font(.system(size: 12, weight: .medium)).foregroundStyle(.cyan)
                             Text("Giá trị được lưu trên iPhone để bạn tham khảo và nhập thủ công trong game.").font(.system(size: 10)).foregroundStyle(.white.opacity(0.5))
                         }
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("CHỌN PHIÊN BẢN GAME").font(.system(size: 12, weight: .black)).foregroundStyle(.cyan)
+                            Picker("Phiên bản", selection: $selectedGame) {
+                                Text("FREE FIRE VN").tag("VN")
+                                Text("FREE FIRE TH").tag("TH")
+                            }
+                            .pickerStyle(.segmented)
+                            Text(selectedGame == "VN" ? "com.garena.ffvn" : "com.dts.freefireth")
+                                .font(.system(size: 10, design: .monospaced)).foregroundStyle(.white.opacity(0.45))
+                        }.padding(15).panel()
                         VStack(alignment: .leading, spacing: 10) {
                             Text("CHỌN PRESET").font(.system(size: 12, weight: .black)).foregroundStyle(.cyan)
                             HStack(spacing: 8) { presetButton("Kéo tâm nhẹ"); presetButton("Headshot") }
@@ -345,15 +534,52 @@ struct SensitivityView: View {
                             sensitivitySlider(title: "Ống ngắm súng ngắm", subtitle: "Ngắm tầm xa", value: $sniper)
                             sensitivitySlider(title: "Nhìn xung quanh", subtitle: "Quan sát môi trường", value: $freeLook)
                         }.padding(16).panel()
-                        Button { UIPasteboard.general.string = clipboardText; copied = true } label: {
-                            Label(copied ? "ĐÃ SAO CHÉP HỒ SƠ" : "SAO CHÉP ĐỘ NHẠY", systemImage: copied ? "checkmark" : "doc.on.doc")
-                                .font(.system(size: 13, weight: .black)).foregroundStyle(.black).frame(maxWidth: .infinity, minHeight: 48)
+                        Button {
+                            // Apply means save this profile locally and copy it for manual entry in-game.
+                            UserDefaults.standard.set(clipboardText, forKey: "md_applied_ff_profile_\(selectedGame)")
+                            UIPasteboard.general.string = clipboardText
+                            copied = true
+                            launchGame()
+                        } label: {
+                            Label("ÁP DỤNG CẤU HÌNH & MỞ GAME", systemImage: "gamecontroller.fill")
+                                .font(.system(size: 13, weight: .black)).foregroundStyle(.black).frame(maxWidth: .infinity, minHeight: 50)
                                 .background(.cyan, in: RoundedRectangle(cornerRadius: 12))
                         }
-                        Text("Preset là giá trị tham khảo; hiệu quả tùy thiết bị và thói quen chơi. Ứng dụng không tự ghi cấu hình vào Free Fire.").font(.system(size: 10)).foregroundStyle(.white.opacity(0.42))
+                        Button { UIPasteboard.general.string = clipboardText; copied = true } label: {
+                            Label(copied ? "ĐÃ SAO CHÉP HỒ SƠ" : "CHỈ SAO CHÉP CẤU HÌNH", systemImage: copied ? "checkmark" : "doc.on.doc")
+                                .font(.system(size: 11, weight: .bold)).foregroundStyle(.cyan).frame(maxWidth: .infinity, minHeight: 42)
+                                .background(.cyan.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
+                        }
+                        if !launchStatus.isEmpty {
+                            Text(launchStatus).font(.system(size: 10, weight: .semibold)).foregroundStyle(.cyan)
+                        }
+                        Text("Ứng dụng lưu hồ sơ và sao chép thông số để bạn nhập trong game, sau đó gửi yêu cầu mở Free Fire bằng URL scheme. iOS không cho app này tự ghi độ nhạy vào dữ liệu riêng của game.").font(.system(size: 10)).foregroundStyle(.white.opacity(0.42))
                     }.padding(18)
                 }
             }.navigationTitle("Độ nhạy Free Fire")
+        }
+    }
+
+    private func launchGame() {
+        let schemes = selectedGame == "TH"
+            ? ["freefireth://"]
+            : ["freefirevn://", "freefire://"]
+        openGameScheme(schemes, index: 0)
+    }
+
+    private func openGameScheme(_ schemes: [String], index: Int) {
+        guard index < schemes.count, let url = URL(string: schemes[index]) else {
+            launchStatus = "Không mở được game. Hãy kiểm tra game đã cài và thử mở thủ công."
+            return
+        }
+        UIApplication.shared.open(url, options: [:]) { success in
+            DispatchQueue.main.async {
+                if success {
+                    launchStatus = "Đã gửi yêu cầu mở FREE FIRE \(selectedGame). Hồ sơ đã được lưu và sao chép."
+                } else {
+                    openGameScheme(schemes, index: index + 1)
+                }
+            }
         }
     }
 
@@ -406,9 +632,9 @@ struct SensitivityView: View {
 // MARK: - Game
 struct GameView: View {
     private let games: [GameItem] = [
-        .init(name: "FREE FIRE VIỆT NAM", subtitle: "Garena Free Fire VN",
-              bundle: "com.garena.game.kgvn", appStore: "https://apps.apple.com/vn/app/id1300146617"),
-        .init(name: "FREE FIRE THÁI LAN", subtitle: "Garena Free Fire TH",
+        .init(name: "FREE FIRE VN", subtitle: "Phiên bản Việt Nam",
+              bundle: "com.garena.ffvn", appStore: "https://apps.apple.com/vn/app/id1300146617"),
+        .init(name: "FREE FIRE TH", subtitle: "Phiên bản TH",
               bundle: "com.dts.freefireth", appStore: "https://apps.apple.com/th/app/id1300146617")
     ]
     var body: some View {
@@ -450,27 +676,15 @@ struct GameView: View {
                                         .frame(maxWidth: .infinity, minHeight: 46)
                                         .background(.cyan, in: RoundedRectangle(cornerRadius: 12))
                                 }
-                                // Mở game nếu đã cài (thử mở qua bundle)
-                                Button {
-                                    let ok = openApp(bundleID: game.bundle)
-                                    if !ok {
-                                        if let url = URL(string: game.appStore) {
-                                            UIApplication.shared.open(url)
-                                        }
-                                    }
-                                } label: {
-                                    Label("MỞ GAME ĐÃ CÀI", systemImage: "play.fill")
-                                        .font(.system(size: 12, weight: .bold))
-                                        .foregroundStyle(.cyan)
-                                        .frame(maxWidth: .infinity, minHeight: 40)
-                                        .background(.cyan.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
-                                }
-                                Text("Bundle ID: \(game.bundle)")
+                                Text("Android Package ID: \(game.bundle)")
                                     .font(.system(size: 9, design: .monospaced))
+                                    .foregroundStyle(.white.opacity(0.45))
+                                Text("Mã gói Android chỉ dùng để nhận diện phiên bản; iOS không thể mở ứng dụng bằng Android package ID.")
+                                    .font(.system(size: 9))
                                     .foregroundStyle(.white.opacity(0.35))
                             }.padding(16).panel()
                         }
-                        Text("iOS không có URL scheme chính thức cho Free Fire. Nút 'Mở game đã cài' chỉ hoạt động nếu bạn đã thêm scheme vào Info.plist; nếu không app sẽ chuyển sang App Store.")
+                        Text("Hai mã gói trên là Android package ID theo đúng phiên bản VN và TH. Trên iOS, nút MỞ / CÀI GAME dẫn đến App Store theo khu vực; không thể dùng Android package ID để khởi chạy game.")
                             .font(.system(size: 10))
                             .foregroundStyle(.white.opacity(0.45))
                     }.padding(18)
@@ -480,14 +694,6 @@ struct GameView: View {
         }
     }
 
-    private func openApp(bundleID: String) -> Bool {
-        guard let url = URL(string: "\(bundleID)://") else { return false }
-        if UIApplication.shared.canOpenURL(url) {
-            UIApplication.shared.open(url)
-            return true
-        }
-        return false
-    }
 }
 
 // MARK: - Admin
