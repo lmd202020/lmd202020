@@ -2,37 +2,36 @@ import SwiftUI
 import UIKit
 import Darwin
 
-// MARK: - Main
+// MARK: - Main app navigation
 struct MainView: View {
     @State private var tab = 0
+    @AppStorage("md_device_setup_completed") private var deviceSetupCompleted = false
+    @State private var showDeviceSetup = false
+
     var body: some View {
         TabView(selection: $tab) {
-            HomeView().tabItem { Label("Trang chủ", systemImage: "house.fill") }.tag(0)
-            CrosshairTrainerView().tabItem { Label("Luyện tâm", systemImage: "scope") }.tag(1)
-            SensitivityView().tabItem { Label("Độ nhạy", systemImage: "slider.horizontal.3") }.tag(2)
-            PerformanceView().tabItem { Label("Tối ưu", systemImage: "speedometer") }.tag(3)
-            CleanerView().tabItem { Label("Dọn dẹp", systemImage: "trash") }.tag(4)
-            GameView().tabItem { Label("Game", systemImage: "gamecontroller.fill") }.tag(5)
-            AdminView().tabItem { Label("Cài đặt", systemImage: "gearshape.fill") }.tag(6)
+            HomeView(selectTab: { tab = $0 })
+                .tabItem { Label("Trang Chủ", systemImage: "house.fill") }.tag(0)
+            GameView()
+                .tabItem { Label("Game", systemImage: "gamecontroller.fill") }.tag(1)
+            DeviceOptimizationView()
+                .tabItem { Label("Tối Ưu", systemImage: "slider.horizontal.3") }.tag(2)
+            LagReductionView()
+                .tabItem { Label("Giảm Lag", systemImage: "bolt.fill") }.tag(3)
+            SensitivityView()
+                .tabItem { Label("Độ Nhạy", systemImage: "scope") }.tag(4)
         }
         .tint(.cyan)
         .toolbarBackground(.hidden, for: .tabBar)
-        .ignoresSafeArea(.keyboard, edges: .bottom)
         .background(AppBackground().ignoresSafeArea())
         .fullScreenCover(isPresented: $showDeviceSetup) {
-            DeviceSetupView {
-                showDeviceSetup = false
-            }
+            DeviceSetupView { showDeviceSetup = false }
         }
         .onAppear {
             if !deviceSetupCompleted { showDeviceSetup = true }
         }
     }
-
-    @AppStorage("md_device_setup_completed") private var deviceSetupCompleted = false
-    @State private var showDeviceSetup = false
 }
-
 
 // MARK: - Device recognition and demo sensitivity onboarding
 private struct DeviceProfileInfo {
@@ -48,8 +47,18 @@ private struct DeviceProfileInfo {
         let identifier = withUnsafePointer(to: &system.machine) {
             $0.withMemoryRebound(to: CChar.self, capacity: 1) { String(cString: $0) }
         }
-        let name = UIDevice.current.model
         let version = UIDevice.current.systemVersion
+        let modelNames: [String: String] = [
+            "iPhone14,2": "iPhone 13 Pro", "iPhone14,3": "iPhone 13 Pro Max",
+            "iPhone14,4": "iPhone 13 mini", "iPhone14,5": "iPhone 13",
+            "iPhone15,2": "iPhone 14 Pro", "iPhone15,3": "iPhone 14 Pro Max",
+            "iPhone15,4": "iPhone 14", "iPhone15,5": "iPhone 14 Plus",
+            "iPhone16,1": "iPhone 15 Pro", "iPhone16,2": "iPhone 15 Pro Max",
+            "iPhone16,3": "iPhone 15", "iPhone16,4": "iPhone 15 Plus",
+            "iPhone17,1": "iPhone 16 Pro", "iPhone17,2": "iPhone 16 Pro Max",
+            "iPhone17,3": "iPhone 16", "iPhone17,4": "iPhone 16 Plus"
+        ]
+        let name = modelNames[identifier] ?? "iPhone (\(identifier))"
         let proMaxModels: Set<String> = ["iPhone15,3", "iPhone16,2", "iPhone17,2"]
         let proModels: Set<String> = ["iPhone15,2", "iPhone16,1", "iPhone17,1"]
         let isProMax = proMaxModels.contains(identifier)
@@ -194,49 +203,94 @@ private struct DeviceSetupView: View {
     }
 }
 
-// MARK: - Home
+// MARK: - Home dashboard
 struct HomeView: View {
+    let selectTab: (Int) -> Void
+    private let device = DeviceProfileInfo.detect()
+
     var body: some View {
-        NavigationView {
+        NavigationStack {
             ZStack {
                 AppBackground().ignoresSafeArea()
                 ScrollView(.vertical, showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 18) {
                         HStack {
                             VStack(alignment: .leading, spacing: 5) {
-                                Text("MINHDUC AIM SUPPORT PRO")
-                                    .font(.system(size: 23, weight: .black, design: .rounded))
+                                Text("MINHDUC")
+                                    .font(.system(size: 28, weight: .black, design: .rounded))
                                     .foregroundStyle(.white)
-                                Text("AIM TRAINER • DEVICE CARE")
-                                    .font(.system(size: 10, weight: .bold, design: .monospaced))
-                                    .foregroundStyle(.cyan)
+                                Text("iOS AIM SUPPORT PRO")
+                                    .font(.system(size: 11, weight: .black, design: .monospaced))
+                                    .tracking(1.4).foregroundStyle(.cyan)
                             }
                             Spacer()
                             Image("BrandLogo").resizable().scaledToFit()
-                                .frame(width: 55, height: 55)
-                                .clipShape(RoundedRectangle(cornerRadius: 14))
+                                .frame(width: 58, height: 58)
+                                .clipShape(RoundedRectangle(cornerRadius: 16))
                         }
+
                         HStack(spacing: 12) {
-                            StatCard(title: "CHẾ ĐỘ", value: "GAMING", icon: "gamecontroller.fill")
-                            StatCard(title: "LUYỆN TẬP", value: "AIM", icon: "scope")
-                        }
+                            Image(systemName: "iphone.gen3")
+                                .font(.system(size: 28)).foregroundStyle(.cyan)
+                                .frame(width: 54, height: 54)
+                                .background(.cyan.opacity(0.12), in: RoundedRectangle(cornerRadius: 14))
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(device.marketingName).font(.system(size: 14, weight: .bold)).foregroundStyle(.white)
+                                Text("iOS \(device.iosVersion)  •  \(device.machineIdentifier)")
+                                    .font(.system(size: 9, design: .monospaced)).foregroundStyle(.white.opacity(0.48))
+                            }
+                            Spacer()
+                            Image(systemName: "checkmark.seal.fill").foregroundStyle(.green)
+                        }.padding(14).panel()
+
                         VStack(alignment: .leading, spacing: 12) {
-                            Label("TỐI ƯU TRƯỚC KHI CHƠI", systemImage: "sparkles")
-                                .font(.system(size: 14, weight: .black))
-                                .foregroundStyle(.cyan)
-                            TipRow(icon: "battery.100percent", title: "Pin", detail: "Tắt Chế độ nguồn điện thấp để tránh giới hạn hiệu năng.")
-                            TipRow(icon: "thermometer.medium", title: "Nhiệt độ", detail: "Để máy nguội; tháo ốp nếu thiết bị quá nóng.")
-                            TipRow(icon: "wifi", title: "Kết nối", detail: "Ưu tiên Wi‑Fi ổn định hoặc mạng di động có tín hiệu tốt.")
-                            TipRow(icon: "bell.slash", title: "Thông báo", detail: "Bật chế độ Tập trung khi chơi game trong Cài đặt iOS.")
-                            TipRow(icon: "internaldrive", title: "Dung lượng", detail: "Giữ đủ dung lượng trống và đóng tác vụ không cần thiết.")
-                        }.padding(18).panel()
-                        Text("Giới hạn iOS: ứng dụng không thể vẽ đè hay can thiệp vào game khác. Trang 'Kéo Tâm' là công cụ luyện tập trong app.")
-                            .font(.system(size: 11))
-                            .foregroundStyle(.white.opacity(0.45))
+                            Text("TRUNG TÂM ĐIỀU KHIỂN")
+                                .font(.system(size: 12, weight: .black, design: .rounded)).foregroundStyle(.cyan)
+                            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                                dashboardTile("MỞ GAME", subtitle: "Free Fire VN / TH", icon: "gamecontroller.fill") { selectTab(1) }
+                                dashboardTile("TỐI ƯU CẤU HÌNH", subtitle: "Hồ sơ thiết bị", icon: "slider.horizontal.3") { selectTab(2) }
+                                dashboardTile("GIẢM LAG MÁY", subtitle: "Chế độ hỗ trợ", icon: "bolt.fill") { selectTab(3) }
+                                dashboardTile("ĐỘ NHẠY", subtitle: "Đề xuất theo máy", icon: "scope") { selectTab(4) }
+                            }
+                        }.padding(16).panel()
+
+                        VStack(alignment: .leading, spacing: 10) {
+                            Label("THÔNG TIN THIẾT BỊ", systemImage: "info.circle.fill")
+                                .font(.system(size: 12, weight: .black)).foregroundStyle(.cyan)
+                            infoRow("Nhóm thiết bị", device.category)
+                            infoRow("Mã máy", device.machineIdentifier)
+                            infoRow("Phiên bản iOS", device.iosVersion)
+                        }.padding(16).panel()
+
+                        Text("Các chế độ tối ưu trong ứng dụng quản lý hồ sơ và hướng dẫn thiết lập iOS. iOS không cho ứng dụng bên thứ ba ép xung, tự đóng ứng dụng khác hoặc thay đổi cấu hình hệ thống tùy ý.")
+                            .font(.system(size: 10)).foregroundStyle(.white.opacity(0.42))
                     }.padding(18)
                 }
             }
+            .toolbar(.hidden, for: .navigationBar)
         }
+    }
+
+    private func dashboardTile(_ title: String, subtitle: String, icon: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 9) {
+                Image(systemName: icon).font(.system(size: 25, weight: .semibold)).foregroundStyle(.cyan)
+                Text(title).font(.system(size: 12, weight: .black)).foregroundStyle(.white)
+                Text(subtitle).font(.system(size: 9)).foregroundStyle(.white.opacity(0.5))
+            }
+            .frame(maxWidth: .infinity, minHeight: 100, alignment: .leading)
+            .padding(13)
+            .background(.white.opacity(0.045), in: RoundedRectangle(cornerRadius: 15))
+            .overlay(RoundedRectangle(cornerRadius: 15).stroke(.cyan.opacity(0.18)))
+        }.buttonStyle(.plain)
+    }
+
+    private func infoRow(_ title: String, _ value: String) -> some View {
+        HStack {
+            Text(title).foregroundStyle(.white.opacity(0.5))
+            Spacer()
+            Text(value).foregroundStyle(.white)
+        }.font(.system(size: 10, weight: .medium))
     }
 }
 
@@ -497,7 +551,7 @@ struct SensitivityView: View {
     @AppStorage("ff_sens_free_look") private var freeLook: Double = 150
     @State private var selectedPreset = "Tùy chỉnh"
     @State private var copied = false
-    @State private var selectedGame = "VN"
+    @AppStorage("md_selected_ff_version") private var selectedGame = "VN"
     @State private var launchStatus = ""
 
     var body: some View {
@@ -520,6 +574,19 @@ struct SensitivityView: View {
                             .pickerStyle(.segmented)
                             Text(selectedGame == "VN" ? "com.garena.ffvn" : "com.dts.freefireth")
                                 .font(.system(size: 10, design: .monospaced)).foregroundStyle(.white.opacity(0.45))
+                        }.padding(15).panel()
+                        VStack(alignment: .leading, spacing: 10) {
+                            let detected = DeviceProfileInfo.detect()
+                            Label("ĐỀ XUẤT THEO THIẾT BỊ", systemImage: "iphone.gen3")
+                                .font(.system(size: 12, weight: .black)).foregroundStyle(.cyan)
+                            Text("\\(detected.marketingName) • \\(detected.category) • iOS \\(detected.iosVersion)")
+                                .font(.system(size: 10)).foregroundStyle(.white.opacity(0.55))
+                            Button { applyDeviceRecommendation() } label: {
+                                Label("TẠO LẠI ĐỘ NHẠY THEO MÁY", systemImage: "wand.and.stars")
+                                    .font(.system(size: 11, weight: .black)).foregroundStyle(.black)
+                                    .frame(maxWidth: .infinity, minHeight: 42)
+                                    .background(.cyan, in: RoundedRectangle(cornerRadius: 10))
+                            }
                         }.padding(15).panel()
                         VStack(alignment: .leading, spacing: 10) {
                             Text("CHỌN PRESET").font(.system(size: 12, weight: .black)).foregroundStyle(.cyan)
@@ -560,6 +627,17 @@ struct SensitivityView: View {
         }
     }
 
+    private func applyDeviceRecommendation() {
+        let values = DeviceProfileInfo.detect().recommendedValues
+        general = values[0]
+        redDot = values[1]
+        scope2x = values[2]
+        scope4x = values[3]
+        sniper = values[4]
+        freeLook = values[5]
+        selectedPreset = "Theo thiết bị"
+    }
+
     private func launchGame() {
         let schemes = selectedGame == "TH"
             ? ["freefireth://"]
@@ -585,7 +663,7 @@ struct SensitivityView: View {
 
     private var clipboardText: String {
         """
-        MINHDUC AIM SUPPORT PRO — FREE FIRE
+        MINHDUC AIM SUPPORT PRO — FREE FIRE \(selectedGame)
         Tổng quan: \(Int(general))
         Red Dot: \(Int(redDot))
         Ống ngắm 2X: \(Int(scope2x))
@@ -629,71 +707,210 @@ struct SensitivityView: View {
 }
 
 
-// MARK: - Game
+// MARK: - Free Fire launcher
 struct GameView: View {
     private let games: [GameItem] = [
-        .init(name: "FREE FIRE VN", subtitle: "Phiên bản Việt Nam",
-              bundle: "com.garena.ffvn", appStore: "https://apps.apple.com/vn/app/id1300146617"),
-        .init(name: "FREE FIRE TH", subtitle: "Phiên bản TH",
-              bundle: "com.dts.freefireth", appStore: "https://apps.apple.com/th/app/id1300146617")
+        .init(name: "FREE FIRE VN", subtitle: "Phiên bản Việt Nam", bundle: "com.garena.ffvn",
+              appStore: "https://apps.apple.com/vn/app/id1300146617", schemes: ["freefirevn://", "freefire://"]),
+        .init(name: "FREE FIRE TH", subtitle: "Phiên bản TH", bundle: "com.dts.freefireth",
+              appStore: "https://apps.apple.com/th/app/id1300146617", schemes: ["freefireth://"])
     ]
+    @State private var launchMessage = ""
+
     var body: some View {
-        NavigationView {
+        NavigationStack {
             ZStack {
-                AppBackground()
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 14) {
-                        Text("CHỌN PHIÊN BẢN GAME")
-                            .font(.system(size: 17, weight: .black))
-                            .foregroundStyle(.white)
+                AppBackground().ignoresSafeArea()
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 15) {
+                        Text("CHỌN PHIÊN BẢN FREE FIRE")
+                            .font(.system(size: 18, weight: .black)).foregroundStyle(.white)
+                        Text("Chọn đúng phiên bản đã cài trên iPhone.")
+                            .font(.system(size: 11)).foregroundStyle(.white.opacity(0.5))
                         ForEach(games) { game in
-                            VStack(alignment: .leading, spacing: 12) {
-                                HStack {
+                            VStack(alignment: .leading, spacing: 13) {
+                                HStack(spacing: 12) {
                                     Image(systemName: "flame.fill")
-                                        .font(.system(size: 25))
-                                        .foregroundStyle(.orange)
-                                        .frame(width: 48, height: 48)
-                                        .background(.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 13))
+                                        .font(.system(size: 27)).foregroundStyle(.orange)
+                                        .frame(width: 54, height: 54)
+                                        .background(.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 15))
                                     VStack(alignment: .leading, spacing: 4) {
-                                        Text(game.name)
-                                            .font(.system(size: 14, weight: .black))
-                                            .foregroundStyle(.white)
-                                        Text(game.subtitle)
-                                            .font(.system(size: 11))
-                                            .foregroundStyle(.white.opacity(0.5))
+                                        Text(game.name).font(.system(size: 16, weight: .black)).foregroundStyle(.white)
+                                        Text(game.subtitle).font(.system(size: 11)).foregroundStyle(.white.opacity(0.5))
                                     }
                                     Spacer()
                                 }
-                                // Mở App Store (scheme freefirevn:// KHÔNG tồn tại)
-                                Button {
-                                    if let url = URL(string: game.appStore) {
-                                        UIApplication.shared.open(url)
-                                    }
-                                } label: {
-                                    Label("MỞ / CÀI GAME", systemImage: "arrow.up.right.square")
-                                        .font(.system(size: 13, weight: .black))
-                                        .foregroundStyle(.black)
-                                        .frame(maxWidth: .infinity, minHeight: 46)
-                                        .background(.cyan, in: RoundedRectangle(cornerRadius: 12))
-                                }
                                 Text("Android Package ID: \(game.bundle)")
-                                    .font(.system(size: 9, design: .monospaced))
-                                    .foregroundStyle(.white.opacity(0.45))
-                                Text("Mã gói Android chỉ dùng để nhận diện phiên bản; iOS không thể mở ứng dụng bằng Android package ID.")
-                                    .font(.system(size: 9))
-                                    .foregroundStyle(.white.opacity(0.35))
-                            }.padding(16).panel()
+                                    .font(.system(size: 9, design: .monospaced)).foregroundStyle(.white.opacity(0.45))
+                                Button { openGame(game) } label: {
+                                    Label("MỞ FREE FIRE", systemImage: "play.fill")
+                                        .font(.system(size: 13, weight: .black)).foregroundStyle(.black)
+                                        .frame(maxWidth: .infinity, minHeight: 49)
+                                        .background(LinearGradient(colors: [.cyan, .mint], startPoint: .leading, endPoint: .trailing),
+                                                    in: RoundedRectangle(cornerRadius: 13))
+                                }
+                                Button {
+                                    if let url = URL(string: game.appStore) { UIApplication.shared.open(url) }
+                                } label: {
+                                    Label("TẢI / XEM TRÊN APP STORE", systemImage: "arrow.up.right.square")
+                                        .font(.system(size: 10, weight: .bold)).foregroundStyle(.cyan)
+                                        .frame(maxWidth: .infinity, minHeight: 38)
+                                        .background(.cyan.opacity(0.1), in: RoundedRectangle(cornerRadius: 10))
+                                }
+                            }.padding(17).panel()
                         }
-                        Text("Hai mã gói trên là Android package ID theo đúng phiên bản VN và TH. Trên iOS, nút MỞ / CÀI GAME dẫn đến App Store theo khu vực; không thể dùng Android package ID để khởi chạy game.")
-                            .font(.system(size: 10))
-                            .foregroundStyle(.white.opacity(0.45))
+                        if !launchMessage.isEmpty {
+                            Text(launchMessage).font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(.cyan).padding(12).panel()
+                        }
+                        Text("Mã package là định danh Android để phân biệt phiên bản. Trên iOS, ứng dụng mở game bằng URL scheme; nếu game không đăng ký scheme đó, hãy dùng App Store hoặc mở game thủ công.")
+                            .font(.system(size: 10)).foregroundStyle(.white.opacity(0.42))
                     }.padding(18)
                 }
             }
-            .navigationTitle("Game")
+            .toolbar(.hidden, for: .navigationBar)
         }
     }
 
+    private func openGame(_ game: GameItem) {
+        tryOpen(game.schemes, index: 0, fallback: game.appStore, title: game.name)
+    }
+
+    private func tryOpen(_ schemes: [String], index: Int, fallback: String, title: String) {
+        guard index < schemes.count, let url = URL(string: schemes[index]) else {
+            launchMessage = "Không mở được \(title). Hãy kiểm tra game đã cài hoặc dùng nút App Store."
+            return
+        }
+        UIApplication.shared.open(url, options: [:]) { success in
+            DispatchQueue.main.async {
+                if success {
+                    launchMessage = "Đã gửi yêu cầu mở \(title)."
+                } else if index + 1 < schemes.count {
+                    tryOpen(schemes, index: index + 1, fallback: fallback, title: title)
+                } else {
+                    launchMessage = "Không mở được \(title). Đang mở App Store."
+                    if let storeURL = URL(string: fallback) { UIApplication.shared.open(storeURL) }
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Device configuration optimization
+struct DeviceOptimizationView: View {
+    @AppStorage("md_config_optimization_enabled") private var enabled = false
+    @AppStorage("md_config_focus_enabled") private var focusGuide = true
+    @AppStorage("md_config_low_power_checked") private var lowPowerGuide = true
+    @AppStorage("md_config_storage_checked") private var storageGuide = true
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                AppBackground().ignoresSafeArea()
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 16) {
+                        header("TỐI ƯU CẤU HÌNH", subtitle: "Bật chế độ hướng dẫn thiết lập iPhone trước khi chơi game.", icon: "slider.horizontal.3")
+                        Toggle(isOn: $enabled) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("BẬT TỐI ƯU CẤU HÌNH").font(.system(size: 14, weight: .black)).foregroundStyle(.white)
+                                Text(enabled ? "Chế độ hỗ trợ đang bật" : "Chế độ hỗ trợ đang tắt")
+                                    .font(.system(size: 10)).foregroundStyle(.white.opacity(0.5))
+                            }
+                        }.tint(.cyan).padding(16).panel()
+
+                        if enabled {
+                            VStack(alignment: .leading, spacing: 14) {
+                                Text("CÁC MỤC TỐI ƯU ĐỀ XUẤT")
+                                    .font(.system(size: 12, weight: .black)).foregroundStyle(.cyan)
+                                Toggle("Bật Tập trung khi chơi game", isOn: $focusGuide).tint(.cyan)
+                                Toggle("Kiểm tra Chế độ nguồn điện thấp", isOn: $lowPowerGuide).tint(.cyan)
+                                Toggle("Kiểm tra dung lượng trống", isOn: $storageGuide).tint(.cyan)
+                                Button { openSettings() } label: {
+                                    Label("MỞ CÀI ĐẶT IPHONE", systemImage: "gear")
+                                        .font(.system(size: 12, weight: .black)).foregroundStyle(.black)
+                                        .frame(maxWidth: .infinity, minHeight: 46)
+                                        .background(.cyan, in: RoundedRectangle(cornerRadius: 12))
+                                }
+                            }.padding(16).panel()
+                            Text("Các công tắc này bật/tắt checklist hỗ trợ trong MINHDUC. iOS không cho ứng dụng tự thay đổi các cài đặt hệ thống này.")
+                                .font(.system(size: 10)).foregroundStyle(.white.opacity(0.42))
+                        } else {
+                            Text("Bật công tắc để hiển thị các bước kiểm tra cấu hình thiết bị trước khi chơi.")
+                                .font(.system(size: 11)).foregroundStyle(.white.opacity(0.5)).padding(16).panel()
+                        }
+                    }.padding(18)
+                }
+            }.toolbar(.hidden, for: .navigationBar)
+        }
+    }
+
+    private func openSettings() {
+        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+        UIApplication.shared.open(url)
+    }
+}
+
+// MARK: - Lag reduction assistance
+struct LagReductionView: View {
+    @AppStorage("md_lag_mode_enabled") private var enabled = false
+    @AppStorage("md_lag_network_checked") private var networkGuide = true
+    @AppStorage("md_lag_temperature_checked") private var temperatureGuide = true
+    @AppStorage("md_lag_background_checked") private var backgroundGuide = true
+    @AppStorage("md_lag_game_checked") private var gameGuide = true
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                AppBackground().ignoresSafeArea()
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 16) {
+                        header("GIẢM LAG MÁY", subtitle: "Bật chế độ hỗ trợ kiểm tra các nguyên nhân gây giật, nóng và mất ổn định.", icon: "bolt.fill")
+                        Toggle(isOn: $enabled) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("BẬT GIẢM LAG MÁY").font(.system(size: 14, weight: .black)).foregroundStyle(.white)
+                                Text(enabled ? "Chế độ hỗ trợ đang bật" : "Chế độ hỗ trợ đang tắt")
+                                    .font(.system(size: 10)).foregroundStyle(.white.opacity(0.5))
+                            }
+                        }.tint(.cyan).padding(16).panel()
+                        if enabled {
+                            VStack(alignment: .leading, spacing: 13) {
+                                Text("KIỂM TRA TRƯỚC KHI CHƠI")
+                                    .font(.system(size: 12, weight: .black)).foregroundStyle(.cyan)
+                                Toggle("Kiểm tra kết nối Wi‑Fi / mạng di động", isOn: $networkGuide).tint(.cyan)
+                                Toggle("Để thiết bị nguội nếu quá nóng", isOn: $temperatureGuide).tint(.cyan)
+                                Toggle("Đóng các tác vụ không cần thiết", isOn: $backgroundGuide).tint(.cyan)
+                                Toggle("Dùng cấu hình đồ họa phù hợp trong game", isOn: $gameGuide).tint(.cyan)
+                                Button { openSettings() } label: {
+                                    Label("MỞ CÀI ĐẶT IPHONE", systemImage: "gear")
+                                        .font(.system(size: 12, weight: .black)).foregroundStyle(.black)
+                                        .frame(maxWidth: .infinity, minHeight: 46)
+                                        .background(.cyan, in: RoundedRectangle(cornerRadius: 12))
+                                }
+                            }.padding(16).panel()
+                            Text("Chế độ này quản lý danh sách hỗ trợ và hướng dẫn. iOS không cho app ép xung CPU/GPU, tự giải phóng RAM hệ thống hoặc đóng ứng dụng khác.")
+                                .font(.system(size: 10)).foregroundStyle(.white.opacity(0.42))
+                        } else {
+                            Text("Bật công tắc để xem checklist giảm lag theo thiết bị.")
+                                .font(.system(size: 11)).foregroundStyle(.white.opacity(0.5)).padding(16).panel()
+                        }
+                    }.padding(18)
+                }
+            }.toolbar(.hidden, for: .navigationBar)
+        }
+    }
+
+    private func openSettings() {
+        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+        UIApplication.shared.open(url)
+    }
+}
+
+private func header(_ title: String, subtitle: String, icon: String) -> some View {
+    VStack(alignment: .leading, spacing: 9) {
+        Image(systemName: icon).font(.system(size: 32, weight: .bold)).foregroundStyle(.cyan)
+        Text(title).font(.system(size: 21, weight: .black, design: .rounded)).foregroundStyle(.white)
+        Text(subtitle).font(.system(size: 11)).foregroundStyle(.white.opacity(0.55))
+    }.padding(17).frame(maxWidth: .infinity, alignment: .leading).panel()
 }
 
 // MARK: - Admin
@@ -860,7 +1077,14 @@ struct CleanerView: View {
 }
 
 // MARK: - Models & helpers
-private struct GameItem: Identifiable { let id = UUID(); let name: String; let subtitle: String; let bundle: String; let appStore: String }
+private struct GameItem: Identifiable {
+    var id: String { bundle }
+    let name: String
+    let subtitle: String
+    let bundle: String
+    let appStore: String
+    let schemes: [String]
+}
 
 private struct StatCard: View {
     let title: String; let value: String; let icon: String
